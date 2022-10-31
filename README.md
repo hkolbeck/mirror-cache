@@ -21,7 +21,7 @@ there is a tolerance for slightly stale values.
 Usage
 =====
 
-To create a `FullDatasetCache` requires a source implementing `ConfigSource` and a processor
+To create a `FullDatasetCache` requires a source implementing `ConfigSource` and a PROCESSOR
 which implements `RawConfigProcessor` that transforms the raw source output into a set or map.
 
 TODO: Build example.
