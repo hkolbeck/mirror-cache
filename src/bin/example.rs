@@ -7,7 +7,7 @@ use full_dataset_cache::cache::{Error, FullDatasetCache, Result};
 use full_dataset_cache::collections::UpdatingMap;
 
 fn main() {
-    let source = LocalFileConfigSource::new(String::from("./src/bin/my.config"));
+    let source = LocalFileConfigSource::new("./src/bin/my.config");
     let processor = RawLineMapProcessor::new(parse);
 
     let cache = FullDatasetCache::<UpdatingMap<String, i32>>::new_map(

@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
+use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
 use reqwest::blocking::{Client, Response};
 use reqwest::StatusCode;
@@ -57,19 +58,19 @@ impl ConfigSource<Response> for HttpConfigSource {
     }
 }
 
-pub struct LocalFileConfigSource {
-    path: String
+pub struct LocalFileConfigSource<P: AsRef<Path>> {
+    path: P,
 }
 
-impl LocalFileConfigSource {
-    pub fn new(path: String) -> LocalFileConfigSource {
+impl<P: AsRef<Path>> LocalFileConfigSource<P> {
+    pub fn new(path: P) -> LocalFileConfigSource<P> {
         LocalFileConfigSource {
             path
         }
     }
 }
 
-impl ConfigSource<BufReader<File>> for LocalFileConfigSource {
+impl<P: AsRef<Path>> ConfigSource<BufReader<File>> for LocalFileConfigSource<P> {
     fn fetch(&self) -> Result<(u64, BufReader<File>)> {
         match self.fetch_if_newer(0)? {
             None => Err(Error::new("Unconditional fetch failed")),
@@ -82,9 +83,10 @@ impl ConfigSource<BufReader<File>> for LocalFileConfigSource {
         let metadata = file.metadata()?;
         match metadata.modified() {
             Ok(t) => {
-                let mtime = t.duration_since(UNIX_EPOCH)?.as_millis() as u64;
-                if version < mtime {
-                    Ok(Some((mtime, BufReader::new(file))))
+                let mtime = t.duration_since(UNIX_EPOCH)?.as_millis();
+                //If version overflows a u64 fetch_if_newer will be effectively unconditional
+                if (version as u128) < mtime {
+                    Ok(Some((mtime as u64, BufReader::new(file))))
                 } else {
                     Ok(None)
                 }
