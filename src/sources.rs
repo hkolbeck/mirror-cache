@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::ops::Add;
 use std::time::{Duration, UNIX_EPOCH};
 use reqwest::blocking::{Client, Response};
@@ -54,3 +56,44 @@ impl ConfigSource<Response> for HttpConfigSource {
         }
     }
 }
+
+pub struct LocalFileConfigSource {
+    path: String
+}
+
+impl LocalFileConfigSource {
+    pub fn new(path: String) -> LocalFileConfigSource {
+        LocalFileConfigSource {
+            path
+        }
+    }
+}
+
+impl ConfigSource<BufReader<File>> for LocalFileConfigSource {
+    fn fetch(&self) -> Result<(u64, BufReader<File>)> {
+        match self.fetch_if_newer(0)? {
+            None => Err(Error::new("Unconditional fetch failed")),
+            Some((v, b)) => Ok((v, b))
+        }
+    }
+
+    fn fetch_if_newer(&self, version: u64) -> Result<Option<(u64, BufReader<File>)>> {
+        let file = File::open(&self.path)?;
+        let metadata = file.metadata()?;
+        match metadata.modified() {
+            Ok(t) => {
+                let mtime = t.duration_since(UNIX_EPOCH)?.as_millis() as u64;
+                if version < mtime {
+                    Ok(Some((mtime, BufReader::new(file))))
+                } else {
+                    Ok(None)
+                }
+            },
+
+            //We're on a platform that doesn't support file mtime, unconditional it is.
+            Err(_) => Ok(Some((0, BufReader::new(file))))
+        }
+
+    }
+}
+

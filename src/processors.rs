@@ -7,11 +7,11 @@ pub trait RawConfigProcessor<S, T> {
     fn process(&self, raw: S) -> Result<T>;
 }
 
-pub struct RawLineSetProcessor<V: Eq + Hash + Sync + Send, P: Fn(String) -> Result<V>> {
+pub struct RawLineSetProcessor<V: Eq + Hash + Sync + Send, P: Fn(String) -> Result<Option<V>>> {
     parse: P,
 }
 
-impl<V: Eq + Hash + Sync + Send, P: Fn(String) -> Result<V>> RawLineSetProcessor<V, P> {
+impl<V: Eq + Hash + Sync + Send, P: Fn(String) -> Result<Option<V>>> RawLineSetProcessor<V, P> {
     pub fn new(parse: P) -> RawLineSetProcessor<V, P> {
         RawLineSetProcessor {
             parse
@@ -22,17 +22,15 @@ impl<V: Eq + Hash + Sync + Send, P: Fn(String) -> Result<V>> RawLineSetProcessor
 impl<
     R: Read,
     V: Eq + Hash + Send + Sync,
-    P: Fn(String) -> Result<V>
+    P: Fn(String) -> Result<Option<V>>
 > RawConfigProcessor<R, HashSet<V>> for RawLineSetProcessor<V, P> {
-
     fn process(&self, raw: R) -> Result<HashSet<V>> {
         let mut set: HashSet<V> = HashSet::new();
         let lines = BufReader::new(raw).lines();
         for line in lines {
-            match line {
-                Ok(l) => set.insert((self.parse)(l)?),
-                Err(e) => return Err(e.into()),
-            };
+            if let Some(v) = (self.parse)(line?)? {
+                set.insert(v);
+            }
         }
 
         Ok(set)
@@ -42,7 +40,7 @@ impl<
 pub struct RawLineMapProcessor<
     K: Eq + Hash + Sync + Send + 'static,
     V: Sync + Send + 'static,
-    P: Fn(String) -> Result<(K, V)>
+    P: Fn(String) -> Result<Option<(K, V)>>
 > {
     parse: P,
 }
@@ -50,9 +48,8 @@ pub struct RawLineMapProcessor<
 impl<
     K: Eq + Hash + Sync + Send,
     V: Sync + Send,
-    P: Fn(String) -> Result<(K, V)>>
+    P: Fn(String) -> Result<Option<(K, V)>>>
 RawLineMapProcessor<K, V, P> {
-
     pub fn new(parse: P) -> RawLineMapProcessor<K, V, P> {
         RawLineMapProcessor {
             parse
@@ -64,19 +61,14 @@ impl<
     R: Read,
     K: Eq + Hash + Sync + Send,
     V: Sync + Send,
-    P: Fn(String) -> Result<(K, V)>>
+    P: Fn(String) -> Result<Option<(K, V)>>>
 RawConfigProcessor<R, HashMap<K, V>> for RawLineMapProcessor<K, V, P> {
-
     fn process(&self, raw: R) -> Result<HashMap<K, V>> {
         let mut map: HashMap<K, V> = HashMap::new();
         let lines = BufReader::new(raw).lines();
         for line in lines {
-            match line {
-                Ok(l) => {
-                    let (k, v) = (self.parse)(l)?;
-                    map.insert(k, v);
-                }
-                Err(e) => return Err(e.into()),
+            if let Some((k, v)) = (self.parse)(line?)? {
+                map.insert(k, v);
             }
         }
 
