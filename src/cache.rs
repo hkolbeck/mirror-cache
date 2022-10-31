@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::result;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use scheduled_executor::ThreadPoolExecutor;
+use scheduled_thread_pool::ScheduledThreadPool;
 use crate::collections::{UpdatingMap, UpdatingSet};
 use crate::processors::RawConfigProcessor;
 use crate::sources::ConfigSource;
@@ -28,12 +28,21 @@ impl Error {
     }
 }
 
+impl<E: std::error::Error> From<E> for Error {
+    fn from(e: E) -> Self {
+        Error::new(e.to_string().as_str())
+    }
+}
+
 pub type Result<T> = result::Result<T, Error>;
+
+type Holder<T> = Arc<RwLock<Arc<Option<(u64, T)>>>>;
 
 pub struct FullDatasetCache<O> {
     collection: Arc<O>,
-    name: String,
-    scheduler: ThreadPoolExecutor,
+
+    #[allow(dead_code)]
+    scheduler: ScheduledThreadPool,
 }
 
 impl<O: 'static> FullDatasetCache<O> {
@@ -55,8 +64,8 @@ impl<O: 'static> FullDatasetCache<O> {
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashSet<V>> + Send + Sync + 'static,
-        U: Fn(&Option<(u64, HashSet<V>)>, &u64, &HashSet<V>) -> () + Send + Sync + 'static,
-        F: Fn(&Error) -> () + Send + Sync + 'static,
+        U: Fn(&Option<(u64, HashSet<V>)>, &u64, &HashSet<V>) + Send + Sync + 'static,
+        F: Fn(&Error) + Send + Sync + 'static,
     >(
         name: String, source: C, processor: P, interval: Duration,
         on_update: U, on_failure: F,
@@ -86,8 +95,8 @@ impl<O: 'static> FullDatasetCache<O> {
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashMap<K, Arc<V>>> + Send + Sync + 'static,
-        U: Fn(&Option<(u64, HashMap<K, Arc<V>>)>, &u64, &HashMap<K, Arc<V>>) -> () + Send + Sync + 'static,
-        F: Fn(&Error) -> () + Send + Sync + 'static,
+        U: Fn(&Option<(u64, HashMap<K, Arc<V>>)>, &u64, &HashMap<K, Arc<V>>) + Send + Sync + 'static,
+        F: Fn(&Error) + Send + Sync + 'static,
     >(
         name: String, source: C, processor: P, interval: Duration,
         on_update: U, on_failure: F,
@@ -102,14 +111,14 @@ impl<O: 'static> FullDatasetCache<O> {
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-        U: Fn(&Option<(u64, T)>, &u64, &T) -> () + Send + Sync + 'static,
-        F: Fn(&Error) -> () + Send + Sync + 'static,
+        U: Fn(&Option<(u64, T)>, &u64, &T) + Send + Sync + 'static,
+        F: Fn(&Error) + Send + Sync + 'static,
         R: Fn(Arc<RwLock<Arc<Option<(u64, T)>>>>) -> O + Send + Sync + 'static,
     >(
         name: String, source: C, processor: P, interval: Duration,
         on_update: U, on_failure: F, constructor: R
     ) -> Result<FullDatasetCache<O>> {
-        let holder: Arc<RwLock<Arc<Option<(u64, T)>>>> = Arc::new(RwLock::new(Arc::new(None)));
+        let holder: Holder<T> = Arc::new(RwLock::new(Arc::new(None)));
         let update_fn = FullDatasetCache::<O>::get_update_fn(holder.clone(), source, processor);
         let initial_fetch = update_fn()?;
 
@@ -119,10 +128,10 @@ impl<O: 'static> FullDatasetCache<O> {
         }
 
         let collection = Arc::new(constructor(holder.clone()));
-        let scheduler = ThreadPoolExecutor::with_prefix(1, name.as_str()).unwrap();
-        scheduler.schedule_fixed_rate(interval, interval, move |_| {
+        let scheduler = ScheduledThreadPool::with_name(name.as_str(), 1);
+        scheduler.execute_at_fixed_rate(interval, interval, move || {
             let previous = {
-                holder.read().expect("Failed to read lock ").clone()
+                holder.read().expect("Failed to get read lock").clone()
             };
 
             match update_fn() {
@@ -134,7 +143,6 @@ impl<O: 'static> FullDatasetCache<O> {
         });
 
         Ok(FullDatasetCache {
-            name,
             collection,
             scheduler,
         })
@@ -154,9 +162,11 @@ impl<O: 'static> FullDatasetCache<O> {
         holder: Arc<RwLock<Arc<Option<(u64, T)>>>>, source: C, processor: P
     ) -> impl Fn() -> Result<Arc<Option<(u64, T)>>> {
         move || {
-            let version = match holder.read().expect("Failed to get read lock").clone().as_ref() {
-                None => None,
-                Some((v, _)) => Some(v.clone())
+            let version = {
+                match holder.read().expect("Failed to get read lock").clone().as_ref() {
+                    None => None,
+                    Some((v, _)) => Some(v.clone())
+                }
             };
 
             let raw_update = match version {

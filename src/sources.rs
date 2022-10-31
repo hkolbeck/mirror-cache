@@ -1,8 +1,6 @@
-use std::io::Read;
 use std::ops::Add;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, UNIX_EPOCH};
 use reqwest::blocking::{Client, Response};
-use reqwest::header::HeaderValue;
 use reqwest::StatusCode;
 use crate::cache::{Error, Result};
 
@@ -55,37 +53,4 @@ impl ConfigSource<Response> for HttpConfigSource {
             Err(Error::new(format!("Fetch failed. Status: {}", resp.status().as_str()).as_str()))
         }
     }
-}
-
-pub struct MultiHttpConfigSource {
-    sources: Vec<HttpConfigSource>,
-}
-
-impl MultiHttpConfigSource {
-    pub fn new(client: Client, urls: Vec<String>) -> MultiHttpConfigSource {
-        MultiHttpConfigSource {
-            sources: urls.into_iter().map(|url| HttpConfigSource::new(client,url)).collect()
-        }
-    }
-}
-
-impl ConfigSource<Response> for MultiHttpConfigSource {
-    fn fetch(&self) -> Result<(u64, Response)> {
-        for source in self.sources {
-            if let Ok(r) = source.fetch() {
-                return Ok(r)
-            }
-        }
-
-        Err(Error::new("All HTTP backends returned Err"))
-    }
-
-    fn fetch_if_newer(&self, version: u64) -> Result<Option<(u64, Response)>> {
-        for source in self.sources {
-            if let Ok(o) = source.fetch_if_newer(version) {
-                return Ok(o)
-            }
-        }
-
-        Err(Error::new("All HTTP backends returned Err"))    }
 }

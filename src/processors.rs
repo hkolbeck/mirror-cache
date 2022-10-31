@@ -1,4 +1,3 @@
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::io::{BufRead, BufReader, Read};
@@ -20,25 +19,38 @@ impl<V: Eq + Hash + Sync + Send, P: Fn(String) -> Result<V>> RawLineSetProcessor
     }
 }
 
-impl<R: Read, V: Eq + Hash + Send + Sync, P: Fn(String) -> Result<V>>
-RawConfigProcessor<R, HashSet<V>> for RawLineSetProcessor<V, P> {
+impl<
+    R: Read,
+    V: Eq + Hash + Send + Sync,
+    P: Fn(String) -> Result<V>
+> RawConfigProcessor<R, HashSet<V>> for RawLineSetProcessor<V, P> {
 
     fn process(&self, raw: R) -> Result<HashSet<V>> {
         let mut set: HashSet<V> = HashSet::new();
-        let mut lines = BufReader::new(raw).lines();
+        let lines = BufReader::new(raw).lines();
         for line in lines {
-            set.insert(self.parse(line?)?)
+            match line {
+                Ok(l) => set.insert((self.parse)(l)?),
+                Err(e) => return Err(e.into()),
+            };
         }
 
         Ok(set)
     }
 }
 
-pub struct RawLineMapProcessor<K: Eq + Hash + Sync + Send, V: Sync + Send, P: Fn(String) -> Result<Entry<'static, K, V>>> {
+pub struct RawLineMapProcessor<
+    K: Eq + Hash + Sync + Send + 'static,
+    V: Sync + Send + 'static,
+    P: Fn(String) -> Result<(K, V)>
+> {
     parse: P,
 }
 
-impl<K: Eq + Hash + Sync + Send, V: Sync + Send, P: Fn(String) -> Result<Entry<'static, K, V>>>
+impl<
+    K: Eq + Hash + Sync + Send,
+    V: Sync + Send,
+    P: Fn(String) -> Result<(K, V)>>
 RawLineMapProcessor<K, V, P> {
 
     pub fn new(parse: P) -> RawLineMapProcessor<K, V, P> {
@@ -48,16 +60,24 @@ RawLineMapProcessor<K, V, P> {
     }
 }
 
-impl<R: Read, K: Eq + Hash + Sync + Send, V: Sync + Send, P: Fn(String) -> Result<Entry<'static, K, V>>>
+impl<
+    R: Read,
+    K: Eq + Hash + Sync + Send,
+    V: Sync + Send,
+    P: Fn(String) -> Result<(K, V)>>
 RawConfigProcessor<R, HashMap<K, V>> for RawLineMapProcessor<K, V, P> {
 
     fn process(&self, raw: R) -> Result<HashMap<K, V>> {
         let mut map: HashMap<K, V> = HashMap::new();
-        let mut lines = BufReader::new(raw).lines();
+        let lines = BufReader::new(raw).lines();
         for line in lines {
-            let entry: Entry<K, V> = self.parse(line)?;
-            let (k, v) = entry.into();
-            map.insert(k, v);
+            match line {
+                Ok(l) => {
+                    let (k, v) = (self.parse)(l)?;
+                    map.insert(k, v);
+                }
+                Err(e) => return Err(e.into()),
+            }
         }
 
         Ok(map)
