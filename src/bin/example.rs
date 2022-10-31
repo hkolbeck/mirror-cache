@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::thread::sleep;
 use std::time::Duration;
 use full_dataset_cache::processors::RawLineMapProcessor;
 use full_dataset_cache::sources::LocalFileConfigSource;
@@ -17,8 +18,10 @@ fn main() {
     ).unwrap();
 
     let map = cache.get_collection();
-
-    println!("C={}", map.get(&String::from("C")).unwrap());
+    loop {
+        sleep(Duration::from_secs(10));
+        println!("C={}", map.get(&String::from("C")).unwrap());
+    }
 }
 
 fn parse(raw: String) -> Result<Option<(String, i32)>> {
