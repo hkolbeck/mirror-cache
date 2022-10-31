@@ -19,8 +19,8 @@ fn main() {
 
     let map = cache.get_collection();
     loop {
-        sleep(Duration::from_secs(10));
         println!("C={}", map.get(&String::from("C")).unwrap());
+        sleep(Duration::from_secs(10));
     }
 }
 
