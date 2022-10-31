@@ -36,7 +36,7 @@ impl<E: std::error::Error> From<E> for Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-type Holder<T> = Arc<RwLock<Arc<Option<(u64, T)>>>>;
+pub(crate) type Holder<T> = Arc<RwLock<Arc<Option<(u64, T)>>>>;
 
 pub struct FullDatasetCache<O> {
     collection: Arc<O>,
@@ -159,7 +159,7 @@ impl<O: 'static> FullDatasetCache<O> {
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, T> + Send + Sync + 'static,
     >(
-        holder: Arc<RwLock<Arc<Option<(u64, T)>>>>, source: C, processor: P
+        holder: Holder<T>, source: C, processor: P
     ) -> impl Fn() -> Result<Arc<Option<(u64, T)>>> {
         move || {
             let version = {

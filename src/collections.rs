@@ -1,15 +1,16 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{Arc, RwLockReadGuard};
+use crate::cache::Holder;
 
 pub struct UpdatingSet<T: Eq + Hash + Send + Sync> {
-    backing: Arc<RwLock<Arc<Option<(u64, HashSet<T>)>>>>
+    backing: Holder<HashSet<T>>
 }
 
-const NON_RUNNING: &'static str = "Attempt to read collection from non-running update service";
+const NON_RUNNING: &str = "Attempt to read collection from non-running update service";
 
 impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
-    pub(crate) fn new(backing: Arc<RwLock<Arc<Option<(u64, HashSet<T>)>>>>) -> UpdatingSet<T> {
+    pub(crate) fn new(backing: Holder<HashSet<T>>) -> UpdatingSet<T> {
         UpdatingSet {
             backing
         }
@@ -44,11 +45,11 @@ impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
 }
 
 pub struct UpdatingMap<K: Eq + Hash, V> {
-    backing: Arc<RwLock<Arc<Option<(u64, HashMap<K, Arc<V>>)>>>>
+    backing: Holder<HashMap<K, Arc<V>>>
 }
 
 impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
-    pub(crate) fn new(backing: Arc<RwLock<Arc<Option<(u64, HashMap<K, Arc<V>>)>>>>) -> UpdatingMap<K, V> {
+    pub(crate) fn new(backing: Holder<HashMap<K, Arc<V>>>) -> UpdatingMap<K, V> {
         UpdatingMap {
             backing
         }
@@ -64,10 +65,7 @@ impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
         match self.get_read_lock().as_ref() {
             None => panic!("{}", NON_RUNNING),
-            Some((_, h)) => match h.get(key) {
-                None => None,
-                Some(v) => Some(v.clone())
-            }
+            Some((_, h)) => h.get(key).cloned()
         }
     }
 
