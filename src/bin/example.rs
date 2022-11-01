@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
@@ -10,12 +11,11 @@ fn main() {
     let source = LocalFileConfigSource::new("./src/bin/my.config");
     let processor = RawLineMapProcessor::new(parse);
 
-    let cache = FullDatasetCache::<UpdatingMap<String, i32>>::new_map(
-        String::from("My Config"),
-        source,
-        processor,
-        Duration::from_secs(10)
-    ).unwrap();
+    let mut cache_builder = FullDatasetCache::<UpdatingMap<String, i32>>::map_builder();
+    cache_builder = cache_builder.with_source(source);
+    cache_builder = cache_builder.with_processor(processor);
+    cache_builder = cache_builder.with_fetch_interval(Duration::from_secs(10));
+    let cache = cache_builder.build().unwrap();
 
     let map = cache.get_collection();
     loop {

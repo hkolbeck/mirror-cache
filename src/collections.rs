@@ -37,7 +37,7 @@ impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
         }
     }
 
-    fn get_read_lock(&self) -> RwLockReadGuard<Arc<Option<(u64, HashSet<T>)>>> {
+    fn get_read_lock(&self) -> RwLockReadGuard<Arc<Option<(u128, HashSet<T>)>>> {
         self.backing.read()
             .expect("Couldn't acquire lock on backing data structure")
 
@@ -83,7 +83,7 @@ impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
         }
     }
 
-    fn get_read_lock(&self) -> Arc<Option<(u64, HashMap<K, Arc<V>>)>> {
+    fn get_read_lock(&self) -> Arc<Option<(u128, HashMap<K, Arc<V>>)>> {
         self.backing.read()
             .expect("Couldn't acquire lock on backing data structure")
             .clone()
