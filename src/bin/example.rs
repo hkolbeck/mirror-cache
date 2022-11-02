@@ -11,7 +11,7 @@ use full_dataset_cache::collections::UpdatingMap;
 use full_dataset_cache::metrics::Metrics;
 
 fn main() {
-    let source = LocalFileConfigSource::new("my.config");
+    let source = LocalFileConfigSource::new("./src/bin/my.config");
     let processor = RawLineMapProcessor::new(parse_line);
 
     let cache = FullDatasetCache::<UpdatingMap<String, i32>>::map_builder()
