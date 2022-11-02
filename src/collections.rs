@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::sync::{Arc, RwLockReadGuard};
+use std::sync::Arc;
 use crate::cache::Holder;
 
 pub struct UpdatingSet<T: Eq + Hash + Send + Sync> {
@@ -37,9 +37,10 @@ impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
         }
     }
 
-    fn get_read_lock(&self) -> RwLockReadGuard<Arc<Option<(u128, HashSet<T>)>>> {
+    fn get_read_lock(&self) -> Arc<Option<(u128, HashSet<T>)>> {
         self.backing.read()
             .expect("Couldn't acquire lock on backing data structure")
+            .clone()
 
     }
 }
@@ -78,6 +79,7 @@ impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn get_read_lock(&self) -> Arc<Option<(u128, HashMap<K, Arc<V>>)>> {
         self.backing.read()
             .expect("Couldn't acquire lock on backing data structure")
