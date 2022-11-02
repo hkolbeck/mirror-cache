@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
