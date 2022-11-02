@@ -48,13 +48,15 @@ pub struct UpdatingMap<K: Eq + Hash, V> {
     backing: Holder<HashMap<K, Arc<V>>>
 }
 
-impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
+impl<K: Eq + Hash, V> UpdatingMap<K, V> {
     pub(crate) fn new(backing: Holder<HashMap<K, Arc<V>>>) -> UpdatingMap<K, V> {
         UpdatingMap {
             backing
         }
     }
+}
 
+impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
     pub fn contains_key(&self, key: &K) -> bool {
         match self.get_read_lock().as_ref() {
             None => panic!("{}", NON_RUNNING),

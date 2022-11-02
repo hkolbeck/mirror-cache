@@ -40,15 +40,71 @@ impl<E: std::error::Error> From<E> for Error {
 pub type Result<T> = result::Result<T, Error>;
 
 pub trait FallbackFn<T> {
-    fn get_fallback(&self) -> T;
+    fn get_fallback(self) -> T;
+}
+
+pub struct Fallback<T> {
+    t: T
+}
+
+impl<T> FallbackFn<T> for Fallback<T> {
+    fn get_fallback(self) -> T {
+        self.t
+    }
+}
+
+impl<T> Fallback<T> {
+    pub fn with_value(t: T) -> Fallback<T> {
+        Fallback {
+            t
+        }
+    }
 }
 
 pub trait UpdateFn<T> {
     fn updated(&self, previous: &Option<(u128, T)>, new_version: &u128, new_dataset: &T);
 }
 
+pub struct OnUpdate<F: Fn(&Option<(u128, T)>, &u128, &T), T> {
+    f: F,
+    _phantom: PhantomData<T>
+}
+
+impl<F: Fn(&Option<(u128, T)>, &u128, &T), T> UpdateFn<T> for OnUpdate<F, T> {
+    fn updated(&self, previous: &Option<(u128, T)>, new_version: &u128, new_dataset: &T) {
+        (self.f)(previous, new_version, new_dataset)
+    }
+}
+
+impl<F: Fn(&Option<(u128, T)>, &u128, &T), T> OnUpdate<F, T> {
+    pub fn with_fn(f: F) -> OnUpdate<F, T> {
+        OnUpdate {
+            f,
+            _phantom: PhantomData::default()
+        }
+    }
+}
+
 pub trait FailureFn {
     fn failed(&self, err: &Error, last_version_and_ts: Option<(u128, Instant)>);
+}
+
+pub struct OnFailure<F: Fn(&Error, Option<(u128, Instant)>)> {
+    f: F
+}
+
+impl<F: Fn(&Error, Option<(u128, Instant)>)> FailureFn for OnFailure<F> {
+    fn failed(&self, err: &Error, last_version_and_ts: Option<(u128, Instant)>) {
+        (self.f)(err, last_version_and_ts)
+    }
+}
+
+impl<F: Fn(&Error, Option<(u128, Instant)>)> OnFailure<F> {
+    pub fn with_fn(f: F) -> OnFailure<F> {
+        OnFailure {
+            f
+        }
+    }
 }
 
 pub(crate) type Holder<T> = Arc<RwLock<Arc<Option<(u128, T)>>>>;
@@ -215,11 +271,7 @@ impl<O: 'static> FullDatasetCache<O> {
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashMap<K, Arc<V>>> + Send + Sync + 'static,
-        U: UpdateFn<HashMap<K, Arc<V>>> + Send + Sync + 'static,
-        F: FailureFn + Send + Sync + 'static,
-        A: FallbackFn<HashMap<K, Arc<V>>>,
-        M: Metrics + Sync + Send + 'static,
-    >() -> Builder<UpdatingMap<K, V>, HashMap<K, Arc<V>>, S, C, P, U, F, A, M> {
+    >() -> Builder<UpdatingMap<K, V>, HashMap<K, Arc<V>>, S, C, P, Absent, Absent, Absent, Absent> {
         builder(UpdatingMap::new)
     }
 
@@ -228,25 +280,21 @@ impl<O: 'static> FullDatasetCache<O> {
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashSet<V>> + Send + Sync + 'static,
-        U: UpdateFn<HashSet<V>> + Send + Sync + 'static,
-        F: FailureFn + Send + Sync + 'static,
-        A: FallbackFn<HashSet<V>>,
-        M: Metrics + Sync + Send + 'static,
-    >() -> Builder<UpdatingSet<V>, HashSet<V>, S, C, P, U, F, A, M> {
+    >() -> Builder<UpdatingSet<V>, HashSet<V>, S, C, P, Absent, Absent, Absent, Absent> {
         builder(UpdatingSet::new)
     }
 }
 
 pub struct Builder<
-    O: 'static,
-    T: Send + Sync + 'static,
-    S: 'static,
-    C: ConfigSource<S> + Send + Sync + 'static,
-    P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-    U: UpdateFn<T> + Send + Sync + 'static=Absent,
-    F: FailureFn + Send + Sync + 'static=Absent,
-    A: FallbackFn<T> + 'static=Absent,
-    M: Metrics + Sync + Send + 'static=Absent,
+    O,
+    T,
+    S,
+    C,
+    P,
+    U=Absent,
+    F=Absent,
+    A=Absent,
+    M=Absent,
 > {
     constructor: fn(Holder<T>) -> O,
     name: Option<String>,
@@ -291,24 +339,64 @@ impl<
         self
     }
 
-    pub fn with_update_callback(mut self, callback: U) -> Builder<O, T, S, C, P, U, F, A, M> {
-        self.update_callback = Some(callback);
-        self
+    pub fn with_update_callback<UU: UpdateFn<T>>(self, callback: UU) -> Builder<O, T, S, C, P, UU, F, A, M> {
+        Builder {
+            constructor: self.constructor,
+            name: self.name,
+            fetch_interval: self.fetch_interval,
+            config_source: self.config_source,
+            config_processor: self.config_processor,
+            failure_callback: self.failure_callback,
+            update_callback: Some(callback),
+            fallback: self.fallback,
+            metrics: self.metrics,
+            phantom: Default::default()
+        }
     }
 
-    pub fn with_failure_callback(mut self, callback: F) -> Builder<O, T, S, C, P, U, F, A, M> {
-        self.failure_callback = Some(callback);
-        self
+    pub fn with_failure_callback<FF: FailureFn>(self, callback: FF) -> Builder<O, T, S, C, P, U, FF, A, M> {
+        Builder {
+            constructor: self.constructor,
+            name: self.name,
+            fetch_interval: self.fetch_interval,
+            config_source: self.config_source,
+            config_processor: self.config_processor,
+            failure_callback: Some(callback),
+            update_callback: self.update_callback,
+            fallback: self.fallback,
+            metrics: self.metrics,
+            phantom: Default::default()
+        }
     }
 
-    pub fn with_metrics(mut self, metrics: M) -> Builder<O, T, S, C, P, U, F, A, M> {
-        self.metrics = Some(metrics);
-        self
+    pub fn with_metrics<MM: Metrics>(self, metrics: MM) -> Builder<O, T, S, C, P, U, F, A, MM> {
+        Builder {
+            constructor: self.constructor,
+            name: self.name,
+            fetch_interval: self.fetch_interval,
+            config_source: self.config_source,
+            config_processor: self.config_processor,
+            failure_callback: self.failure_callback,
+            update_callback: self.update_callback,
+            fallback: self.fallback,
+            metrics: Some(metrics),
+            phantom: Default::default()
+        }
     }
 
-    pub fn with_fallback(mut self, fallback_version: u128, fallback: A) -> Builder<O, T, S, C, P, U, F, A, M> {
-        self.fallback = Some((fallback_version, fallback));
-        self
+    pub fn with_fallback<AA: FallbackFn<T>>(self, fallback_version: u128, fallback: AA) -> Builder<O, T, S, C, P, U, F, AA, M> {
+        Builder {
+            constructor: self.constructor,
+            name: self.name,
+            fetch_interval: self.fetch_interval,
+            config_source: self.config_source,
+            config_processor: self.config_processor,
+            failure_callback: self.failure_callback,
+            update_callback: self.update_callback,
+            fallback: Some((fallback_version, fallback)),
+            metrics: self.metrics,
+            phantom: Default::default()
+        }
     }
 
     pub fn build(self) -> Result<FullDatasetCache<O>> {
@@ -344,11 +432,7 @@ fn builder<
     S: 'static,
     C: ConfigSource<S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-    U: UpdateFn<T> + Send + Sync + 'static,
-    F: FailureFn + Send + Sync + 'static,
-    A: FallbackFn<T>,
-    M: Metrics + Sync + Send + 'static,
->(constructor: fn(Holder<T>) -> O) -> Builder<O, T, S, C, P, U, F, A, M> {
+>(constructor: fn(Holder<T>) -> O) -> Builder<O, T, S, C, P, Absent, Absent, Absent, Absent> {
     Builder {
         constructor,
         name: None,
@@ -372,7 +456,7 @@ impl<T> UpdateFn<T> for Absent {
 }
 
 impl<T> FallbackFn<T> for Absent {
-    fn get_fallback(&self) -> T {
+    fn get_fallback(self) -> T {
         panic!("Should never be called");
     }
 }
