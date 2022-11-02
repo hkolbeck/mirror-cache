@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -38,6 +39,18 @@ impl<E: std::error::Error> From<E> for Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
+pub trait FallbackFn<T> {
+    fn get_fallback(&self) -> T;
+}
+
+pub trait UpdateFn<T> {
+    fn updated(&self, previous: &Option<(u128, T)>, new_version: &u128, new_dataset: &T);
+}
+
+pub trait FailureFn {
+    fn failed(&self, err: &Error, last_version_and_ts: Option<(u128, Instant)>);
+}
+
 pub(crate) type Holder<T> = Arc<RwLock<Arc<Option<(u128, T)>>>>;
 
 pub struct FullDatasetCache<O> {
@@ -54,9 +67,9 @@ impl<O: 'static> FullDatasetCache<O> {
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-        U: Fn(&Option<(u128, T)>, &u128, &T) + Send + Sync + 'static,
-        F: Fn(&Error, Option<(u128, Instant)>) + Send + Sync + 'static,
-        A: Fn() -> T + 'static,
+        U: UpdateFn<T> + Send + Sync + 'static,
+        F: FailureFn + Send + Sync + 'static,
+        A: FallbackFn<T> + 'static,
         M: Metrics + Send + Sync + 'static
     >(
         name: Option<String>, source: C, processor: P, interval: Duration,
@@ -73,15 +86,15 @@ impl<O: 'static> FullDatasetCache<O> {
                 match fallback {
                     Some((v, fallback_fun)) => {
                         let mut guard = holder.write().expect("Failed to claim write lock");
-                        *guard = Arc::new(Some((v, fallback_fun())));
+                        *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
 
                     },
                     None => return Err(Error::new("Couldn't complete initial fetch")),
                 }
             }
             Some((v, s)) => {
-                if let Some(update_callback) = &on_update {
-                    update_callback(&None, v, s);
+                if let Some(update_callback) = on_update.borrow() {
+                    update_callback.updated(&None, v, s);
                 }
             },
         };
@@ -102,13 +115,13 @@ impl<O: 'static> FullDatasetCache<O> {
                 Ok(a) => if let Some((v, t)) = a.as_ref() {
                     last_success = Instant::now();
                     if let Some(update_callback) = &on_update {
-                        update_callback(&previous, v, t)
+                        update_callback.updated(&previous, v, t)
                     }
                 }
                 Err(e) => {
                     if let Some(failure_callback) = &on_failure {
                         let last = previous.as_ref().as_ref().map(|(v, _)| (*v, last_success));
-                        failure_callback(&e, last)
+                        failure_callback.failed(&e, last)
                     }
                 }
             }
@@ -201,10 +214,10 @@ impl<O: 'static> FullDatasetCache<O> {
         V: Send + Sync + 'static,
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
-        A: Fn() -> HashMap<K, Arc<V>>,
         P: RawConfigProcessor<S, HashMap<K, Arc<V>>> + Send + Sync + 'static,
-        U: Fn(&Option<(u128, HashMap<K, Arc<V>>)>, &u128, &HashMap<K, Arc<V>>) + Send + Sync + 'static,
-        F: Fn(&Error, Option<(u128, Instant)>) + Send + Sync + 'static,
+        U: UpdateFn<HashMap<K, Arc<V>>> + Send + Sync + 'static,
+        F: FailureFn + Send + Sync + 'static,
+        A: FallbackFn<HashMap<K, Arc<V>>>,
         M: Metrics + Sync + Send + 'static,
     >() -> Builder<UpdatingMap<K, V>, HashMap<K, Arc<V>>, S, C, P, U, F, A, M> {
         builder(UpdatingMap::new)
@@ -214,10 +227,10 @@ impl<O: 'static> FullDatasetCache<O> {
         V: Eq + Hash + Send + Sync + 'static,
         S: 'static,
         C: ConfigSource<S> + Send + Sync + 'static,
-        A: Fn() -> HashSet<V>,
         P: RawConfigProcessor<S, HashSet<V>> + Send + Sync + 'static,
-        U: Fn(&Option<(u128, HashSet<V>)>, &u128, &HashSet<V>) + Send + Sync + 'static,
-        F: Fn(&Error, Option<(u128, Instant)>) + Send + Sync + 'static,
+        U: UpdateFn<HashSet<V>> + Send + Sync + 'static,
+        F: FailureFn + Send + Sync + 'static,
+        A: FallbackFn<HashSet<V>>,
         M: Metrics + Sync + Send + 'static,
     >() -> Builder<UpdatingSet<V>, HashSet<V>, S, C, P, U, F, A, M> {
         builder(UpdatingSet::new)
@@ -230,10 +243,10 @@ pub struct Builder<
     S: 'static,
     C: ConfigSource<S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-    U: Fn(&Option<(u128, T)>, &u128, &T) + Send + Sync + 'static,
-    F: Fn(&Error, Option<(u128, Instant)>) + Send + Sync + 'static,
-    A: Fn() -> T + 'static,
-    M: Metrics + Sync + Send + 'static
+    U: UpdateFn<T> + Send + Sync + 'static=Absent,
+    F: FailureFn + Send + Sync + 'static=Absent,
+    A: FallbackFn<T> + 'static=Absent,
+    M: Metrics + Sync + Send + 'static=Absent,
 > {
     constructor: fn(Holder<T>) -> O,
     name: Option<String>,
@@ -253,9 +266,9 @@ impl<
     S: 'static,
     C: ConfigSource<S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-    U: Fn(&Option<(u128, T)>, &u128, &T) + Send + Sync + 'static,
-    F: Fn(&Error, Option<(u128, Instant)>) + Send + Sync + 'static,
-    A: Fn() -> T + 'static,
+    U: UpdateFn<T> + Send + Sync + 'static,
+    F: FailureFn + Send + Sync + 'static,
+    A: FallbackFn<T> + 'static,
     M: Metrics + Sync + Send + 'static
 > Builder<O, T, S, C, P, U, F, A, M> {
     pub fn with_name(mut self, name: String) -> Builder<O, T, S, C, P, U, F, A, M> {
@@ -331,9 +344,9 @@ fn builder<
     S: 'static,
     C: ConfigSource<S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-    U: Fn(&Option<(u128, T)>, &u128, &T) + Send + Sync + 'static,
-    F: Fn(&Error, Option<(u128, Instant)>) + Send + Sync + 'static,
-    A: Fn() -> T,
+    U: UpdateFn<T> + Send + Sync + 'static,
+    F: FailureFn + Send + Sync + 'static,
+    A: FallbackFn<T>,
     M: Metrics + Sync + Send + 'static,
 >(constructor: fn(Holder<T>) -> O) -> Builder<O, T, S, C, P, U, F, A, M> {
     Builder {
@@ -348,4 +361,40 @@ fn builder<
         metrics: None,
         phantom: Default::default(),
     }
+}
+
+pub struct Absent {}
+
+impl<T> UpdateFn<T> for Absent {
+    fn updated(&self, _previous: &Option<(u128, T)>, _new_version: &u128, _new_dataset: &T) {
+        panic!("Should never be called");
+    }
+}
+
+impl<T> FallbackFn<T> for Absent {
+    fn get_fallback(&self) -> T {
+        panic!("Should never be called");
+    }
+}
+
+impl FailureFn for Absent {
+    fn failed(&self, _err: &Error, _last_version_and_ts: Option<(u128, Instant)>) {
+        panic!("Should never be called");
+    }
+}
+
+impl Metrics for Absent {
+    fn update(&mut self, _new_version: &u128, _fetch_time: Duration, _process_time: Duration) {}
+
+    fn last_successful_update(&mut self, _ts: Instant) {}
+
+    fn check_no_update(&mut self, _check_time: &Duration) {}
+
+    fn last_successful_check(&mut self, _ts: &Instant) {}
+
+    fn fallback_invoked(&mut self) {}
+
+    fn fetch_error(&mut self) {}
+
+    fn process_error(&mut self) {}
 }

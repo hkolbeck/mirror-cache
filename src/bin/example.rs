@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
@@ -25,7 +24,7 @@ fn main() {
 }
 
 fn parse(raw: String) -> Result<Option<(String, i32)>> {
-    if raw.is_empty() || raw.starts_with('#') {
+    if raw.trim().is_empty() || raw.starts_with('#') {
         return Ok(None);
     }
 
