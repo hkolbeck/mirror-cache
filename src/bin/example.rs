@@ -14,7 +14,7 @@ fn main() {
     let cache_builder = FullDatasetCache::<UpdatingMap<String, i32>>::map_builder()
         .with_source(source)
         .with_processor(processor)
-        .with_fetch_interval(Duration::from_secs(1))
+        .with_fetch_interval(Duration::from_secs(2))
         .with_fallback(0, Fallback::with_value(HashMap::new()))
         .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v)))
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)));
