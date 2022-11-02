@@ -5,7 +5,8 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::result;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
+use chrono::{DateTime, Utc};
 use scheduled_thread_pool::ScheduledThreadPool;
 use crate::collections::{UpdatingMap, UpdatingSet};
 use crate::metrics::Metrics;
@@ -135,22 +136,40 @@ impl<O: 'static> FullDatasetCache<O> {
         let holder: Holder<T> = Arc::new(RwLock::new(Arc::new(None)));
         let update_fn =
             FullDatasetCache::<O>::get_update_fn(holder.clone(), source, processor);
-        let initial_fetch = update_fn(metrics.as_mut())?;
+        let initial_fetch = update_fn(metrics.as_mut());
 
         match initial_fetch.as_ref() {
-            None => {
+            Err(e) => {
                 match fallback {
                     Some((v, fallback_fun)) => {
                         let mut guard = holder.write().expect("Failed to claim write lock");
                         *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
-
+                        if let Some(m) = metrics.as_mut() {
+                            m.fallback_invoked();
+                        }
                     },
-                    None => return Err(Error::new("Couldn't complete initial fetch")),
+                    None => return Err(Error::new(format!("Couldn't complete initial fetch: {}", e).as_str())),
                 }
             }
-            Some((v, s)) => {
-                if let Some(update_callback) = on_update.borrow() {
-                    update_callback.updated(&None, v, s);
+            Ok(init) => {
+                match init.as_ref() {
+                    None => {
+                        match fallback {
+                            Some((v, fallback_fun)) => {
+                                let mut guard = holder.write().expect("Failed to claim write lock");
+                                *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
+                                if let Some(m) = metrics.as_mut() {
+                                    m.fallback_invoked();
+                                }
+                            },
+                            None => return Err(Error::new("Initial fetch should be unconditional but failed and no fallback specified")),
+                        }
+                    }
+                    Some((v, s)) => {
+                        if let Some(update_callback) = on_update.borrow() {
+                            update_callback.updated(&None, v, s);
+                        }
+                    }
                 }
             },
         };
@@ -224,7 +243,7 @@ impl<O: 'static> FullDatasetCache<O> {
                 Ok(Some((v, s))) => Some((v, processor.process(s))),
                 Err(e) => {
                     if let Some(m) = metrics {
-                        m.fetch_error()
+                        m.fetch_error(&e)
                     }
                     return Err(e);
                 }
@@ -240,7 +259,7 @@ impl<O: 'static> FullDatasetCache<O> {
                     };
 
                     if let Some(m) = metrics {
-                        m.last_successful_update(Instant::now());
+                        m.last_successful_update(&DateTime::from(SystemTime::now()));
                         m.update(&v, fetch_time, process_time);
                     };
 
@@ -248,13 +267,13 @@ impl<O: 'static> FullDatasetCache<O> {
                 }
                 Some((_, Err(e))) => {
                     if let Some(m) = metrics {
-                        m.process_error()
+                        m.process_error(&e)
                     }
                     Err(e)
                 }
                 None => {
                     if let Some(m) = metrics {
-                        m.last_successful_check(&Instant::now());
+                        m.last_successful_check(&DateTime::from(SystemTime::now()));
                         m.check_no_update(&fetch_time);
                     }
 
@@ -468,17 +487,31 @@ impl FailureFn for Absent {
 }
 
 impl Metrics for Absent {
-    fn update(&mut self, _new_version: &u128, _fetch_time: Duration, _process_time: Duration) {}
+    fn update(&mut self, _new_version: &u128, _fetch_time: Duration, _process_time: Duration) {
+        panic!("Should never be called");
+    }
 
-    fn last_successful_update(&mut self, _ts: Instant) {}
+    fn last_successful_update(&mut self, _ts: &DateTime<Utc>) {
+        panic!("Should never be called");
+    }
 
-    fn check_no_update(&mut self, _check_time: &Duration) {}
+    fn check_no_update(&mut self, _check_time: &Duration) {
+        panic!("Should never be called");
+    }
 
-    fn last_successful_check(&mut self, _ts: &Instant) {}
+    fn last_successful_check(&mut self, _ts: &DateTime<Utc>) {
+        panic!("Should never be called");
+    }
 
-    fn fallback_invoked(&mut self) {}
+    fn fallback_invoked(&mut self) {
+        panic!("Should never be called");
+    }
 
-    fn fetch_error(&mut self) {}
+    fn fetch_error(&mut self, _err: &Error) {
+        panic!("Should never be called");
+    }
 
-    fn process_error(&mut self) {}
+    fn process_error(&mut self, _err: &Error) {
+        panic!("Should never be called");
+    }
 }

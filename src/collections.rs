@@ -57,13 +57,6 @@ impl<K: Eq + Hash, V> UpdatingMap<K, V> {
 }
 
 impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
-    pub fn contains_key(&self, key: &K) -> bool {
-        match self.get_read_lock().as_ref() {
-            None => panic!("{}", NON_RUNNING),
-            Some((_, h)) => h.contains_key(key)
-        }
-    }
-
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
         match self.get_read_lock().as_ref() {
             None => panic!("{}", NON_RUNNING),
