@@ -4,9 +4,9 @@ use std::path::Path;
 use std::time::UNIX_EPOCH;
 use crate::cache::Result;
 
-pub trait ConfigSource<S> {
-    fn fetch(&self) -> Result<(u128, S)>;
-    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(u128, S)>>;
+pub trait ConfigSource<E, S> {
+    fn fetch(&self) -> Result<(Option<E>, S)>;
+    fn fetch_if_newer(&self, version: &E) -> Result<Option<(Option<E>, S)>>;
 }
 
 pub struct LocalFileConfigSource<P: AsRef<Path>> {
@@ -21,36 +21,36 @@ impl<P: AsRef<Path>> LocalFileConfigSource<P> {
     }
 }
 
-impl<P: AsRef<Path>> ConfigSource<BufReader<File>> for LocalFileConfigSource<P> {
-    fn fetch(&self) -> Result<(u128, BufReader<File>)> {
+impl<P: AsRef<Path>> ConfigSource<u128, BufReader<File>> for LocalFileConfigSource<P> {
+    fn fetch(&self) -> Result<(Option<u128>, BufReader<File>)> {
         let file = File::open(&self.path)?;
         let metadata = file.metadata()?;
         match metadata.modified() {
             Ok(t) => {
                 let mtime = t.duration_since(UNIX_EPOCH)?.as_millis();
-                Ok((mtime, BufReader::new(file)))
+                Ok((Some(mtime), BufReader::new(file)))
             }
 
             //We're on a platform that doesn't support file mtime, unconditional it is.
-            Err(_) => Ok((0, BufReader::new(file)))
+            Err(_) => Ok((None, BufReader::new(file)))
         }
     }
 
-    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(u128, BufReader<File>)>> {
+    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(Option<u128>, BufReader<File>)>> {
         let file = File::open(&self.path)?;
         let metadata = file.metadata()?;
         match metadata.modified() {
             Ok(t) => {
                 let mtime = t.duration_since(UNIX_EPOCH)?.as_millis();
                 if version < &mtime {
-                    Ok(Some((mtime, BufReader::new(file))))
+                    Ok(Some((Some(mtime), BufReader::new(file))))
                 } else {
                     Ok(None)
                 }
             },
 
             //We're on a platform that doesn't support file mtime, unconditional it is.
-            Err(_) => Ok(Some((0, BufReader::new(file))))
+            Err(_) => Ok(Some((None, BufReader::new(file))))
         }
     }
 }

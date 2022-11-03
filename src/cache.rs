@@ -63,53 +63,57 @@ impl<T> Fallback<T> {
     }
 }
 
-pub trait UpdateFn<T> {
-    fn updated(&self, previous: &Option<(u128, T)>, new_version: &u128, new_dataset: &T);
+pub trait UpdateFn<T, E> {
+    fn updated(&self, previous: &Option<(Option<E>, T)>, new_version: &Option<E>, new_dataset: &T);
 }
 
-pub struct OnUpdate<F: Fn(&Option<(u128, T)>, &u128, &T), T> {
+pub struct OnUpdate<E, F: Fn(&Option<(Option<E>, T)>, &Option<E>, &T), T> {
     f: F,
-    _phantom: PhantomData<T>
+    _phantom_t: PhantomData<T>,
+    _phantom_e: PhantomData<E>,
 }
 
-impl<F: Fn(&Option<(u128, T)>, &u128, &T), T> UpdateFn<T> for OnUpdate<F, T> {
-    fn updated(&self, previous: &Option<(u128, T)>, new_version: &u128, new_dataset: &T) {
+impl<E, F: Fn(&Option<(Option<E>, T)>, &Option<E>, &T), T> UpdateFn<T, E> for OnUpdate<E, F, T> {
+    fn updated(&self, previous: &Option<(Option<E>, T)>, new_version: &Option<E>, new_dataset: &T) {
         (self.f)(previous, new_version, new_dataset)
     }
 }
 
-impl<F: Fn(&Option<(u128, T)>, &u128, &T), T> OnUpdate<F, T> {
-    pub fn with_fn(f: F) -> OnUpdate<F, T> {
+impl<E, F: Fn(&Option<(Option<E>, T)>, &Option<E>, &T), T> OnUpdate<E, F, T> {
+    pub fn with_fn(f: F) -> OnUpdate<E, F, T> {
         OnUpdate {
             f,
-            _phantom: PhantomData::default()
+            _phantom_t: PhantomData::default(),
+            _phantom_e: PhantomData::default(),
         }
     }
 }
 
-pub trait FailureFn {
-    fn failed(&self, err: &Error, last_version_and_ts: Option<(u128, Instant)>);
+pub trait FailureFn<E> {
+    fn failed(&self, err: &Error, last_version_and_ts: Option<(Option<E>, DateTime<Utc>)>);
 }
 
-pub struct OnFailure<F: Fn(&Error, Option<(u128, Instant)>)> {
-    f: F
+pub struct OnFailure<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> {
+    f: F,
+    _phantom_e: PhantomData<E>,
 }
 
-impl<F: Fn(&Error, Option<(u128, Instant)>)> FailureFn for OnFailure<F> {
-    fn failed(&self, err: &Error, last_version_and_ts: Option<(u128, Instant)>) {
+impl<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> FailureFn<E> for OnFailure<E, F> {
+    fn failed(&self, err: &Error, last_version_and_ts: Option<(Option<E>, DateTime<Utc>)>) {
         (self.f)(err, last_version_and_ts)
     }
 }
 
-impl<F: Fn(&Error, Option<(u128, Instant)>)> OnFailure<F> {
-    pub fn with_fn(f: F) -> OnFailure<F> {
+impl<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> OnFailure<E, F> {
+    pub fn with_fn(f: F) -> OnFailure<E, F> {
         OnFailure {
-            f
+            f,
+            _phantom_e: PhantomData::default(),
         }
     }
 }
 
-pub(crate) type Holder<T> = Arc<RwLock<Arc<Option<(u128, T)>>>>;
+pub(crate) type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
 
 pub struct FullDatasetCache<O> {
     collection: Arc<O>,
@@ -123,18 +127,19 @@ impl<O: 'static> FullDatasetCache<O> {
     fn construct_and_start<
         T: Send + Sync + 'static,
         S: 'static,
-        C: ConfigSource<S> + Send + Sync + 'static,
+        E: Send + Sync + Clone + 'static,
+        C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-        U: UpdateFn<T> + Send + Sync + 'static,
-        F: FailureFn + Send + Sync + 'static,
+        U: UpdateFn<T, E> + Send + Sync + 'static,
+        F: FailureFn<E> + Send + Sync + 'static,
         A: FallbackFn<T> + 'static,
-        M: Metrics + Send + Sync + 'static
+        M: Metrics<E> + Send + Sync + 'static
     >(
         name: Option<String>, source: C, processor: P, interval: Duration,
         on_update: Option<U>, on_failure: Option<F>, mut metrics: Option<M>,
-        fallback: Option<(u128, A)>, constructor: fn(Holder<T>) -> O,
+        fallback: Option<A>, constructor: fn(Holder<E, T>) -> O,
     ) -> Result<FullDatasetCache<O>> {
-        let holder: Holder<T> = Arc::new(RwLock::new(Arc::new(None)));
+        let holder: Holder<E, T> = Arc::new(RwLock::new(Arc::new(None)));
         let update_fn =
             FullDatasetCache::<O>::get_update_fn(holder.clone(), source, processor);
         let initial_fetch = update_fn(metrics.as_mut());
@@ -142,23 +147,23 @@ impl<O: 'static> FullDatasetCache<O> {
         match initial_fetch.as_ref() {
             Err(e) => {
                 match fallback {
-                    Some((v, fallback_fun)) => {
+                    Some(fallback_fun) => {
                         let mut guard = holder.write();
-                        *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
+                        *guard = Arc::new(Some((None, fallback_fun.get_fallback())));
                         if let Some(m) = metrics.as_mut() {
                             m.fallback_invoked();
                         }
                     },
                     None => return Err(Error::new(format!("Couldn't complete initial fetch: {}", e).as_str())),
                 }
-            }
+            },
             Ok(init) => {
                 match init.as_ref() {
                     None => {
                         match fallback {
-                            Some((v, fallback_fun)) => {
+                            Some(fallback_fun) => {
                                 let mut guard = holder.write();
-                                *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
+                                *guard = Arc::new(Some((None, fallback_fun.get_fallback())));
                                 if let Some(m) = metrics.as_mut() {
                                     m.fallback_invoked();
                                 }
@@ -175,7 +180,7 @@ impl<O: 'static> FullDatasetCache<O> {
             },
         };
 
-        let mut last_success = Instant::now();
+        let mut last_success = DateTime::from(SystemTime::now());
         let collection = Arc::new(constructor(holder.clone()));
         let scheduler = match name {
             Some(n) => ScheduledThreadPool::with_name(n.as_str(), 1),
@@ -189,14 +194,14 @@ impl<O: 'static> FullDatasetCache<O> {
 
             match update_fn(metrics.as_mut()) {
                 Ok(a) => if let Some((v, t)) = a.as_ref() {
-                    last_success = Instant::now();
+                    last_success = DateTime::from(SystemTime::now());
                     if let Some(update_callback) = &on_update {
                         update_callback.updated(&previous, v, t)
                     }
-                }
+                },
                 Err(e) => {
                     if let Some(failure_callback) = &on_failure {
-                        let last = previous.as_ref().as_ref().map(|(v, _)| (*v, last_success));
+                        let last = previous.as_ref().map(|(v, _)| (v, last_success));
                         failure_callback.failed(&e, last)
                     }
                 }
@@ -216,21 +221,23 @@ impl<O: 'static> FullDatasetCache<O> {
     fn get_update_fn<
         S,
         T,
-        C: ConfigSource<S> + Send + Sync + 'static,
+        E: Clone,
+        C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-        M: Metrics + Send + Sync + 'static,
+        M: Metrics<E> + Send + Sync + 'static,
     >(
-        holder: Holder<T>, source: C, processor: P,
-    ) -> impl Fn(Option<&mut M>) -> Result<Arc<Option<(u128, T)>>> {
+        holder: Holder<E, T>, source: C, processor: P,
+    ) -> impl Fn(Option<&mut M>) -> Result<Arc<Option<(Option<E>, T)>>> {
         move |metrics| {
             let version = {
-                holder.read().as_ref().as_ref().map(|(v, _)| *v)
+                let guard = holder.read();
+                guard.as_ref().as_ref().map(|(v, _)| v.clone())
             };
 
             let fetch_start = Instant::now();
             let raw_update = match version {
-                None => source.fetch().map(Some),
-                Some(v) => source.fetch_if_newer(&v),
+                None | Some(None) => source.fetch().map(Some),
+                Some(Some(v)) => source.fetch_if_newer(&v),
             };
             let fetch_time = Instant::now().duration_since(fetch_start);
 
@@ -251,7 +258,7 @@ impl<O: 'static> FullDatasetCache<O> {
                 Some((v, Ok(new_coll))) => {
                     let ret = {
                         let mut write_lock = holder.write();
-                        *write_lock = Arc::new(Some((v, new_coll)));
+                        *write_lock = Arc::new(Some((v.clone(), new_coll)));
                         Ok(write_lock.clone())
                     };
 
@@ -287,18 +294,20 @@ impl<O: 'static> FullDatasetCache<O> {
         K: Eq + Hash + Send + Sync + 'static,
         V: Send + Sync + 'static,
         S: 'static,
-        C: ConfigSource<S> + Send + Sync + 'static,
+        E: Sync + Send + 'static,
+        C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashMap<K, Arc<V>>> + Send + Sync + 'static,
-    >() -> Builder<UpdatingMap<K, V>, HashMap<K, Arc<V>>, S, C, P, Absent, Absent, Absent, Absent> {
+    >() -> Builder<UpdatingMap<E, K, V>, HashMap<K, Arc<V>>, S, E, C, P, Absent, Absent, Absent, Absent> {
         builder(UpdatingMap::new)
     }
 
     pub fn set_builder<
         V: Eq + Hash + Send + Sync + 'static,
         S: 'static,
-        C: ConfigSource<S> + Send + Sync + 'static,
+        E: Sync + Send + 'static,
+        C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashSet<V>> + Send + Sync + 'static,
-    >() -> Builder<UpdatingSet<V>, HashSet<V>, S, C, P, Absent, Absent, Absent, Absent> {
+    >() -> Builder<UpdatingSet<E, V>, HashSet<V>, S, E, C, P, Absent, Absent, Absent, Absent> {
         builder(UpdatingSet::new)
     }
 }
@@ -307,6 +316,7 @@ pub struct Builder<
     O,
     T,
     S,
+    E,
     C,
     P,
     U=Absent,
@@ -314,14 +324,14 @@ pub struct Builder<
     A=Absent,
     M=Absent,
 > {
-    constructor: fn(Holder<T>) -> O,
+    constructor: fn(Holder<E, T>) -> O,
     name: Option<String>,
     fetch_interval: Option<Duration>,
     config_source: Option<C>,
     config_processor: Option<P>,
     failure_callback: Option<F>,
     update_callback: Option<U>,
-    fallback: Option<(u128, A)>,
+    fallback: Option<A>,
     metrics: Option<M>,
     phantom: PhantomData<S>,
 }
@@ -330,34 +340,35 @@ impl<
     O: Send + Sync + 'static,
     T: Send + Sync + 'static,
     S: 'static,
-    C: ConfigSource<S> + Send + Sync + 'static,
+    E: Send + Sync + Clone + 'static,
+    C: ConfigSource<E, S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
-    U: UpdateFn<T> + Send + Sync + 'static,
-    F: FailureFn + Send + Sync + 'static,
+    U: UpdateFn<T, E> + Send + Sync + 'static,
+    F: FailureFn<E> + Send + Sync + 'static,
     A: FallbackFn<T> + 'static,
-    M: Metrics + Sync + Send + 'static
-> Builder<O, T, S, C, P, U, F, A, M> {
-    pub fn with_name<N: Into<String>>(mut self, name: N) -> Builder<O, T, S, C, P, U, F, A, M> {
+    M: Metrics<E> + Sync + Send + 'static
+> Builder<O, T, S, E, C, P, U, F, A, M> {
+    pub fn with_name<N: Into<String>>(mut self, name: N) -> Builder<O, T, S, E, C, P, U, F, A, M> {
         self.name = Some(name.into());
         self
     }
 
-    pub fn with_source(mut self, source: C) -> Builder<O, T, S, C, P, U, F, A, M> {
+    pub fn with_source(mut self, source: C) -> Builder<O, T, S, E, C, P, U, F, A, M> {
         self.config_source = Some(source);
         self
     }
 
-    pub fn with_processor(mut self, processor: P) -> Builder<O, T, S, C, P, U, F, A, M> {
+    pub fn with_processor(mut self, processor: P) -> Builder<O, T, S, E, C, P, U, F, A, M> {
         self.config_processor = Some(processor);
         self
     }
 
-    pub fn with_fetch_interval(mut self, fetch_interval: Duration) -> Builder<O, T, S, C, P, U, F, A, M> {
+    pub fn with_fetch_interval(mut self, fetch_interval: Duration) -> Builder<O, T, S, E, C, P, U, F, A, M> {
         self.fetch_interval = Some(fetch_interval);
         self
     }
 
-    pub fn with_update_callback<UU: UpdateFn<T>>(self, callback: UU) -> Builder<O, T, S, C, P, UU, F, A, M> {
+    pub fn with_update_callback<UU: UpdateFn<E, T>>(self, callback: UU) -> Builder<O, T, S, E, C, P, UU, F, A, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -368,11 +379,11 @@ impl<
             update_callback: Some(callback),
             fallback: self.fallback,
             metrics: self.metrics,
-            phantom: Default::default()
+            phantom: PhantomData::default()
         }
     }
 
-    pub fn with_failure_callback<FF: FailureFn>(self, callback: FF) -> Builder<O, T, S, C, P, U, FF, A, M> {
+    pub fn with_failure_callback<FF: FailureFn<E>>(self, callback: FF) -> Builder<O, T, S, E, C, P, U, FF, A, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -383,11 +394,11 @@ impl<
             update_callback: self.update_callback,
             fallback: self.fallback,
             metrics: self.metrics,
-            phantom: Default::default()
+            phantom: PhantomData::default()
         }
     }
 
-    pub fn with_metrics<MM: Metrics>(self, metrics: MM) -> Builder<O, T, S, C, P, U, F, A, MM> {
+    pub fn with_metrics<MM: Metrics<E>>(self, metrics: MM) -> Builder<O, T, S, E, C, P, U, F, A, MM> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -398,11 +409,11 @@ impl<
             update_callback: self.update_callback,
             fallback: self.fallback,
             metrics: Some(metrics),
-            phantom: Default::default()
+            phantom: PhantomData::default()
         }
     }
 
-    pub fn with_fallback<AA: FallbackFn<T>>(self, fallback_version: u128, fallback: AA) -> Builder<O, T, S, C, P, U, F, AA, M> {
+    pub fn with_fallback<AA: FallbackFn<T>>(self, fallback: AA) -> Builder<O, T, S, E, C, P, U, F, AA, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -411,9 +422,9 @@ impl<
             config_processor: self.config_processor,
             failure_callback: self.failure_callback,
             update_callback: self.update_callback,
-            fallback: Some((fallback_version, fallback)),
+            fallback: Some(fallback),
             metrics: self.metrics,
-            phantom: Default::default()
+            phantom: PhantomData::default()
         }
     }
 
@@ -448,9 +459,10 @@ fn builder<
     O: Sync + Send + 'static,
     T: Send + Sync + 'static,
     S: 'static,
-    C: ConfigSource<S> + Send + Sync + 'static,
+    E,
+    C: ConfigSource<E, S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
->(constructor: fn(Holder<T>) -> O) -> Builder<O, T, S, C, P, Absent, Absent, Absent, Absent> {
+>(constructor: fn(Holder<E, T>) -> O) -> Builder<O, T, S, E, C, P, Absent, Absent, Absent, Absent> {
     Builder {
         constructor,
         name: None,
@@ -461,14 +473,14 @@ fn builder<
         update_callback: None,
         fallback: None,
         metrics: None,
-        phantom: Default::default(),
+        phantom: PhantomData::default()
     }
 }
 
 pub struct Absent {}
 
-impl<T> UpdateFn<T> for Absent {
-    fn updated(&self, _previous: &Option<(u128, T)>, _new_version: &u128, _new_dataset: &T) {
+impl<E, T> UpdateFn<T, E> for Absent {
+    fn updated(&self, _previous: &Option<(Option<E>, T)>, _new_version: &Option<E>, _new_dataset: &T) {
         panic!("Should never be called");
     }
 }
@@ -479,14 +491,14 @@ impl<T> FallbackFn<T> for Absent {
     }
 }
 
-impl FailureFn for Absent {
-    fn failed(&self, _err: &Error, _last_version_and_ts: Option<(u128, Instant)>) {
+impl<E> FailureFn<E> for Absent {
+    fn failed(&self, _err: &Error, _last_version_and_ts: Option<(Option<E>, DateTime<Utc>)>) {
         panic!("Should never be called");
     }
 }
 
-impl Metrics for Absent {
-    fn update(&mut self, _new_version: &u128, _fetch_time: Duration, _process_time: Duration) {
+impl<E> Metrics<E> for Absent {
+    fn update(&mut self, _new_version: &Option<E>, _fetch_time: Duration, _process_time: Duration) {
         panic!("Should never be called");
     }
 

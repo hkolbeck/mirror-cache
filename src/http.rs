@@ -1,6 +1,5 @@
-use std::ops::Add;
-use std::time::{Duration, UNIX_EPOCH};
 use reqwest::blocking::{Client, Response};
+use reqwest::header::ToStrError;
 use reqwest::StatusCode;
 use crate::cache::{Error, Result};
 use crate::sources::ConfigSource;
@@ -17,41 +16,37 @@ impl HttpConfigSource {
             url,
         }
     }
+
+    fn get_version(resp: &Response) -> Option<String> {
+        let option = resp.headers()
+            .get("Last-Modified")
+            .map(|h| h.to_str())
+            .map(|r| r.map(String::from));
+        match option {
+            None | Some(Err(_)) => None,
+            Some(Ok(s)) => Some(s),
+        }
+    }
 }
 
-impl ConfigSource<Response> for HttpConfigSource {
-    fn fetch(&self) -> Result<(u128, Response)> {
+impl ConfigSource<String, Response> for HttpConfigSource {
+    fn fetch(&self) -> Result<(Option<String>, Response)> {
         let resp = self.client.get(self.url.as_str()).send()?;
 
         if resp.status().is_success() {
-            let version = if let Some(header) = resp.headers().get("Last-Modified") {
-                let date = httpdate::parse_http_date(header.to_str()?)?;
-                date.duration_since(UNIX_EPOCH)?.as_millis()
-            } else {
-                0
-            };
-
-            Ok((version, resp))
+            Ok((HttpConfigSource::get_version(&resp), resp))
         } else {
             Err(Error::new(format!("Fetch failed. Status: {}", resp.status().as_str()).as_str()))
         }
     }
 
-    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(u128, Response)>> {
-        let date = UNIX_EPOCH.add(Duration::from_millis(*version as u64));
+    fn fetch_if_newer(&self, version: &String) -> Result<Option<(Option<String>, Response)>> {
         let resp = self.client.get(self.url.as_str())
-            .header("If-Modified-Since", httpdate::fmt_http_date(date))
+            .header("If-Modified-Since", version)
             .send()?;
 
         if resp.status().is_success() {
-            let version = if let Some(header) = resp.headers().get("Last-Modified") {
-                let date = httpdate::parse_http_date(header.to_str()?)?;
-                date.duration_since(UNIX_EPOCH)?.as_millis()
-            } else {
-                0
-            };
-
-            Ok(Some((version, resp)))
+            Ok(Some((HttpConfigSource::get_version(&resp), resp)))
         } else if resp.status() == StatusCode::NOT_MODIFIED {
             Ok(None)
         } else {

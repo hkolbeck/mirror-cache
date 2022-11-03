@@ -3,14 +3,14 @@ use std::hash::Hash;
 use std::sync::Arc;
 use crate::cache::Holder;
 
-pub struct UpdatingSet<T: Eq + Hash + Send + Sync> {
-    backing: Holder<HashSet<T>>
+pub struct UpdatingSet<E, T: Eq + Hash + Send + Sync> {
+    backing: Holder<E, HashSet<T>>
 }
 
 const NON_RUNNING: &str = "Attempt to read collection from non-running update service";
 
-impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
-    pub(crate) fn new(backing: Holder<HashSet<T>>) -> UpdatingSet<T> {
+impl<E, T: Eq + Hash + Send + Sync> UpdatingSet<E, T> {
+    pub(crate) fn new(backing: Holder<E, HashSet<T>>) -> UpdatingSet<E, T> {
         UpdatingSet {
             backing
         }
@@ -42,19 +42,19 @@ impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
     }
 }
 
-pub struct UpdatingMap<K: Eq + Hash, V> {
-    backing: Holder<HashMap<K, Arc<V>>>
+pub struct UpdatingMap<E, K: Eq + Hash, V> {
+    backing: Holder<E, HashMap<K, Arc<V>>>
 }
 
-impl<K: Eq + Hash, V> UpdatingMap<K, V> {
-    pub(crate) fn new(backing: Holder<HashMap<K, Arc<V>>>) -> UpdatingMap<K, V> {
+impl<E, K: Eq + Hash, V> UpdatingMap<E, K, V> {
+    pub(crate) fn new(backing: Holder<E, HashMap<K, Arc<V>>>) -> UpdatingMap<E, K, V> {
         UpdatingMap {
             backing
         }
     }
 }
 
-impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
+impl<E, K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<E, K, V> {
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
         match self.get_collection().as_ref() {
             None => panic!("{}", NON_RUNNING),

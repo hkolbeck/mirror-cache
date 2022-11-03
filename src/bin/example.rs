@@ -13,7 +13,7 @@ fn main() {
     let source = LocalFileConfigSource::new("./src/bin/my.config");
     let processor = RawLineMapProcessor::new(parse_line);
 
-    let cache = FullDatasetCache::<UpdatingMap<String, i32>>::map_builder()
+    let cache = FullDatasetCache::<UpdatingMap<u128, String, i32>>::map_builder()
         // These are required.
         .with_source(source)
         .with_processor(processor)
@@ -47,7 +47,7 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
 
 struct ExampleMetrics {}
 
-impl Metrics for ExampleMetrics {
+impl Metrics<u128> for ExampleMetrics {
     fn update(&mut self, _new_version: &u128, fetch_time: Duration, process_time: Duration) {
         println!("Update fetch took {}ms and process took {}ms", fetch_time.as_millis(), process_time.as_millis());
     }
