@@ -29,7 +29,7 @@ type. See the appropriate section below for more details on each of the builder 
 ```rust
 fn make_cache() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
-    let processor = RawLineMapProcessor::new(|line| {...});
+    let processor = RawLineMapProcessor::new(|line| {/* Parsing! */});
 
     FullDatasetCache::<UpdatingMap<K, V>>::map_builder()
         // These are required.
