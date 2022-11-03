@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Add;
@@ -9,7 +10,7 @@ use crate::cache::{Error, Result};
 
 pub trait ConfigSource<S> {
     fn fetch(&self) -> Result<(u128, S)>;
-    fn fetch_if_newer(&self, version: u128) -> Result<Option<(u128, S)>>;
+    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(u128, S)>>;
 }
 
 pub struct HttpConfigSource {
@@ -21,22 +22,22 @@ impl HttpConfigSource {
     pub fn new(client: Client, url: String) -> HttpConfigSource {
         HttpConfigSource {
             client,
-            url
+            url,
         }
     }
 }
 
 impl ConfigSource<Response> for HttpConfigSource {
     fn fetch(&self) -> Result<(u128, Response)> {
-        let fetched = self.fetch_if_newer(0)?;
+        let fetched = self.fetch_if_newer((0 as u128).borrow())?;
         match fetched {
             None => Err(Error::new("Unconditional fetch returned nothing")),
             Some(r) => Ok(r),
         }
     }
 
-    fn fetch_if_newer(&self, version: u128) -> Result<Option<(u128, Response)>> {
-        let date = UNIX_EPOCH.add(Duration::from_millis(version as u64));
+    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(u128, Response)>> {
+        let date = UNIX_EPOCH.add(Duration::from_millis(*version as u64));
         let resp = self.client.get(self.url.as_str())
             .header("If-Modified-Since", httpdate::fmt_http_date(date))
             .send()?;
@@ -72,19 +73,26 @@ impl<P: AsRef<Path>> LocalFileConfigSource<P> {
 
 impl<P: AsRef<Path>> ConfigSource<BufReader<File>> for LocalFileConfigSource<P> {
     fn fetch(&self) -> Result<(u128, BufReader<File>)> {
-        match self.fetch_if_newer(0)? {
-            None => Err(Error::new("Unconditional fetch failed")),
-            Some((v, b)) => Ok((v, b))
-        }
-    }
-
-    fn fetch_if_newer(&self, version: u128) -> Result<Option<(u128, BufReader<File>)>> {
         let file = File::open(&self.path)?;
         let metadata = file.metadata()?;
         match metadata.modified() {
             Ok(t) => {
                 let mtime = t.duration_since(UNIX_EPOCH)?.as_millis();
-                if version < mtime {
+                Ok((mtime, BufReader::new(file)))
+            }
+
+            //We're on a platform that doesn't support file mtime, unconditional it is.
+            Err(_) => Ok((0, BufReader::new(file)))
+        }
+    }
+
+    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(u128, BufReader<File>)>> {
+        let file = File::open(&self.path)?;
+        let metadata = file.metadata()?;
+        match metadata.modified() {
+            Ok(t) => {
+                let mtime = t.duration_since(UNIX_EPOCH)?.as_millis();
+                if version < &mtime {
                     Ok(Some((mtime, BufReader::new(file))))
                 } else {
                     Ok(None)

@@ -4,9 +4,10 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::result;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use chrono::{DateTime, Utc};
+use parking_lot::RwLock;
 use scheduled_thread_pool::ScheduledThreadPool;
 use crate::collections::{UpdatingMap, UpdatingSet};
 use crate::metrics::Metrics;
@@ -142,7 +143,7 @@ impl<O: 'static> FullDatasetCache<O> {
             Err(e) => {
                 match fallback {
                     Some((v, fallback_fun)) => {
-                        let mut guard = holder.write().expect("Failed to claim write lock");
+                        let mut guard = holder.write();
                         *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
                         if let Some(m) = metrics.as_mut() {
                             m.fallback_invoked();
@@ -156,7 +157,7 @@ impl<O: 'static> FullDatasetCache<O> {
                     None => {
                         match fallback {
                             Some((v, fallback_fun)) => {
-                                let mut guard = holder.write().expect("Failed to claim write lock");
+                                let mut guard = holder.write();
                                 *guard = Arc::new(Some((v, fallback_fun.get_fallback())));
                                 if let Some(m) = metrics.as_mut() {
                                     m.fallback_invoked();
@@ -183,7 +184,7 @@ impl<O: 'static> FullDatasetCache<O> {
 
         scheduler.execute_at_fixed_rate(interval, interval, move || {
             let previous = {
-                holder.read().expect("Failed to get read lock").clone()
+                holder.read().clone()
             };
 
             match update_fn(metrics.as_mut()) {
@@ -223,17 +224,13 @@ impl<O: 'static> FullDatasetCache<O> {
     ) -> impl Fn(Option<&mut M>) -> Result<Arc<Option<(u128, T)>>> {
         move |metrics| {
             let version = {
-                #[allow(clippy::manual_map)] //Trust me, it's uglier the other way
-                match holder.read().expect("Failed to get read lock").clone().as_ref() {
-                    None => None,
-                    Some((v, _)) => Some(*v)
-                }
+                holder.read().as_ref().as_ref().map(|(v, _)| *v)
             };
 
             let fetch_start = Instant::now();
             let raw_update = match version {
                 None => source.fetch().map(Some),
-                Some(v) => source.fetch_if_newer(v),
+                Some(v) => source.fetch_if_newer(&v),
             };
             let fetch_time = Instant::now().duration_since(fetch_start);
 
@@ -253,7 +250,7 @@ impl<O: 'static> FullDatasetCache<O> {
             match update {
                 Some((v, Ok(new_coll))) => {
                     let ret = {
-                        let mut write_lock = holder.write().expect("Failed to get write lock");
+                        let mut write_lock = holder.write();
                         *write_lock = Arc::new(Some((v, new_coll)));
                         Ok(write_lock.clone())
                     };

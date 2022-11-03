@@ -8,3 +8,4 @@ scheduled-thread-pool = "0.2.6"
 reqwest = {version = "0.11.12", features = ["blocking"]}
 httpdate = "1.0.2"
 chrono = "0.4.22"
+parking_lot = "0.12.1"

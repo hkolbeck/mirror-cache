@@ -38,10 +38,7 @@ impl<T: Eq + Hash + Send + Sync> UpdatingSet<T> {
     }
 
     fn get_collection(&self) -> Arc<Option<(u128, HashSet<T>)>> {
-        self.backing.read()
-            .expect("Couldn't acquire lock on backing data structure")
-            .clone()
-
+        self.backing.read().clone()
     }
 }
 
@@ -81,8 +78,6 @@ impl<K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<K, V> {
 
     #[allow(clippy::type_complexity)]
     fn get_collection(&self) -> Arc<Option<(u128, HashMap<K, Arc<V>>)>> {
-        self.backing.read()
-            .expect("Couldn't acquire lock on backing data structure")
-            .clone()
+        self.backing.read().clone()
     }
 }
