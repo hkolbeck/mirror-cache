@@ -256,7 +256,9 @@ impl<O: 'static> FullDatasetCache<O> {
                     };
 
                     if let Some(m) = metrics {
-                        m.last_successful_update(&DateTime::from(SystemTime::now()));
+                        let now = SystemTime::now();
+                        m.last_successful_check(&DateTime::from(now));
+                        m.last_successful_update(&DateTime::from(now));
                         m.update(&v, fetch_time, process_time);
                     };
 

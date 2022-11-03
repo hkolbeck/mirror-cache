@@ -126,8 +126,8 @@ i32, then loops forever printing the value of the key `C`. It's very noisy, as t
 metrics implementation just calls `println!()`.
 
 ```
-Fallback invoked! #Initial fetch failed, fallback value of an empty map returned
-C=0 #Defaults to 0 if key isn't in map
+Fallback invoked! #Initial fetch failed, fallback value of an empty map used
+C=0 #Example defaults to 0 if key isn't in map
 Last successful update is now at 2022-11-03 00:46:09.121312 UTC #Successful fetch completed
 Update fetch took 0ms and process took 0ms
 Updated to version 1667435391751
