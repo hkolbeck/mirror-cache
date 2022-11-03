@@ -6,6 +6,10 @@ pub mod processors;
 pub mod collections;
 pub mod metrics;
 
+pub mod s3;
+pub mod http;
+pub mod gcs;
+
 #[cfg(test)]
 mod tests {
     #[test]
