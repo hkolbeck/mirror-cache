@@ -335,8 +335,8 @@ impl<
     A: FallbackFn<T> + 'static,
     M: Metrics + Sync + Send + 'static
 > Builder<O, T, S, C, P, U, F, A, M> {
-    pub fn with_name(mut self, name: String) -> Builder<O, T, S, C, P, U, F, A, M> {
-        self.name = Some(name);
+    pub fn with_name<N: Into<String>>(mut self, name: N) -> Builder<O, T, S, C, P, U, F, A, M> {
+        self.name = Some(name.into());
         self
     }
 

@@ -29,10 +29,19 @@ impl HttpConfigSource {
 
 impl ConfigSource<Response> for HttpConfigSource {
     fn fetch(&self) -> Result<(u128, Response)> {
-        let fetched = self.fetch_if_newer((0 as u128).borrow())?;
-        match fetched {
-            None => Err(Error::new("Unconditional fetch returned nothing")),
-            Some(r) => Ok(r),
+        let resp = self.client.get(self.url.as_str()).send()?;
+
+        if resp.status().is_success() {
+            let version = if let Some(header) = resp.headers().get("Last-Modified") {
+                let date = httpdate::parse_http_date(header.to_str()?)?;
+                date.duration_since(UNIX_EPOCH)?.as_millis()
+            } else {
+                0
+            };
+
+            Ok((version, resp))
+        } else {
+            Err(Error::new(format!("Fetch failed. Status: {}", resp.status().as_str()).as_str()))
         }
     }
 
