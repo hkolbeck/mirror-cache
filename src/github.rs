@@ -1,18 +1,38 @@
 use std::io::Cursor;
-use octocrab::repos::RepoHandler;
+use octocrab::Octocrab;
+use tokio::runtime::Runtime;
 use crate::sources::ConfigSource;
 use crate::cache::{Error, Result};
 
 pub struct GitHubConfigSource {
-    repo: RepoHandler<'static>,
+    client: Octocrab,
+    owner: String,
+    repo: String,
     branch: String,
     path: String,
+    rt: Runtime,
+}
+
+impl GitHubConfigSource {
+    pub fn new<S: Into<String>>(octocrab: Octocrab, owner: S, repo: S, branch: S, path: S) -> Result<GitHubConfigSource> {
+        Ok(GitHubConfigSource {
+            client: octocrab,
+            owner: owner.into(),
+            repo: repo.into(),
+            branch: branch.into(),
+            path: path.into(),
+            rt: tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?,
+        })
+    }
 }
 
 impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
     fn fetch(&self) -> Result<(Option<String>, Cursor<Vec<u8>>)> {
-        let content_items = futures::executor::block_on(
-            self.repo.get_content()
+        let handler = self.client.repos(self.owner.clone(), self.repo.clone());
+        let content_items = self.rt.block_on(
+            handler.get_content()
                 .r#ref(self.branch.clone())
                 .path(self.path.clone())
                 .send()
@@ -30,8 +50,9 @@ impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
     }
 
     fn fetch_if_newer(&self, version: &String) -> Result<Option<(Option<String>, Cursor<Vec<u8>>)>> {
-        let commits = futures::executor::block_on(
-            self.repo.list_commits()
+        let handler = self.client.repos(self.owner.clone(), self.repo.clone());
+        let commits = self.rt.block_on(
+            handler.list_commits()
                 .branch(self.branch.clone())
                 .path(self.path.clone())
                 .send()
@@ -39,7 +60,7 @@ impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
 
         if let Some(last_commit) = commits.items.first() {
             if &last_commit.sha == version {
-                return Ok(None)
+                return Ok(None);
             }
         }
 

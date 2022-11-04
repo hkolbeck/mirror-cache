@@ -11,12 +11,12 @@ parking_lot = "0.12.1"
 reqwest = {version = "0.11.12", features = ["blocking"], optional = true}
 aws-sdk-s3 = { version = "0.21.0", optional = true}
 #google-cloud-storage = { version = "0.5.1", optional = true }
-futures = { version = "0.3.25", optional = true }
 octocrab = { version = "0.17.0", optional = true }
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"], optional = true }
 
 [features]
-default = ["octocrab"]
+default = ["github"]
 http = ["reqwest"]
-s3 = ["aws-sdk-s3", "futures"]
-#gcs = ["google-cloud-storage", "futures"]
-github = ["octocrab", "futures"]
+s3 = ["aws-sdk-s3", "tokio"]
+#gcs = ["google-cloud-storage", "tokio"]
+github = ["octocrab", "tokio"]
