@@ -20,8 +20,8 @@ fn main() {
         .with_fetch_interval(Duration::from_secs(2))
         // These are optional
         .with_name("my-cache")
-        .with_fallback(0, Fallback::with_value(HashMap::new()))
-        .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v)))
+        .with_fallback(Fallback::with_value(HashMap::new()))
+        .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v.unwrap_or(0))))
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
@@ -48,7 +48,7 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
 struct ExampleMetrics {}
 
 impl Metrics<u128> for ExampleMetrics {
-    fn update(&mut self, _new_version: &u128, fetch_time: Duration, process_time: Duration) {
+    fn update(&mut self, _new_version: &Option<u128>, fetch_time: Duration, process_time: Duration) {
         println!("Update fetch took {}ms and process took {}ms", fetch_time.as_millis(), process_time.as_millis());
     }
 

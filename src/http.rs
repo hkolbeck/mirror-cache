@@ -1,5 +1,4 @@
 use reqwest::blocking::{Client, Response};
-use reqwest::header::ToStrError;
 use reqwest::StatusCode;
 use crate::cache::{Error, Result};
 use crate::sources::ConfigSource;

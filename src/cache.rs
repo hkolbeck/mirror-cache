@@ -201,7 +201,7 @@ impl<O: 'static> FullDatasetCache<O> {
                 },
                 Err(e) => {
                     if let Some(failure_callback) = &on_failure {
-                        let last = previous.as_ref().map(|(v, _)| (v, last_success));
+                        let last = previous.as_ref().as_ref().map(|(v, _)| (v.clone(), last_success));
                         failure_callback.failed(&e, last)
                     }
                 }
@@ -301,6 +301,7 @@ impl<O: 'static> FullDatasetCache<O> {
         builder(UpdatingMap::new)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn set_builder<
         V: Eq + Hash + Send + Sync + 'static,
         S: 'static,
@@ -368,7 +369,7 @@ impl<
         self
     }
 
-    pub fn with_update_callback<UU: UpdateFn<E, T>>(self, callback: UU) -> Builder<O, T, S, E, C, P, UU, F, A, M> {
+    pub fn with_update_callback<UU: UpdateFn<T, E>>(self, callback: UU) -> Builder<O, T, S, E, C, P, UU, F, A, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,

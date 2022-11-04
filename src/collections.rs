@@ -37,7 +37,7 @@ impl<E, T: Eq + Hash + Send + Sync> UpdatingSet<E, T> {
         }
     }
 
-    fn get_collection(&self) -> Arc<Option<(u128, HashSet<T>)>> {
+    fn get_collection(&self) -> Arc<Option<(Option<E>, HashSet<T>)>> {
         self.backing.read().clone()
     }
 }
@@ -77,7 +77,7 @@ impl<E, K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<E, K, V> {
     }
 
     #[allow(clippy::type_complexity)]
-    fn get_collection(&self) -> Arc<Option<(u128, HashMap<K, Arc<V>>)>> {
+    fn get_collection(&self) -> Arc<Option<(Option<E>, HashMap<K, Arc<V>>)>> {
         self.backing.read().clone()
     }
 }

@@ -1,7 +1,6 @@
 use aws_sdk_s3::Client;
-use aws_sdk_s3::error::GetObjectError;
-use aws_sdk_s3::output::GetObjectOutput;
 use aws_sdk_s3::types::{ByteStream, DateTime, SdkError};
+use reqwest::StatusCode;
 use crate::cache::Result;
 use crate::sources::ConfigSource;
 
@@ -35,16 +34,19 @@ impl ConfigSource<DateTime, ByteStream> for S3ObjectConfigSource {
         let result = futures::executor::block_on(self.client.get_object()
             .bucket(self.bucket.clone())
             .key(self.path.clone())
-            .if_modified_since(version.clone())
+            .if_modified_since(*version)
             .send());
 
         match result {
             Ok(resp) => Ok(Some((resp.last_modified().cloned(), resp.body))),
-            Err(e) => {
-                e.
-            }
+            Err(SdkError::ServiceError{err, raw}) => {
+                if raw.http().status() == StatusCode::NOT_MODIFIED {
+                    Ok(None)
+                } else {
+                    Err(err.into())
+                }
+            },
+            Err(err) => Err(err.into())
         }
-
-
     }
 }
