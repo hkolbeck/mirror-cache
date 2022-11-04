@@ -1,9 +1,7 @@
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
-use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use chrono::{DateTime, Utc};
@@ -12,7 +10,8 @@ use scheduled_thread_pool::ScheduledThreadPool;
 use crate::collections::{UpdatingMap, UpdatingSet};
 use crate::metrics::Metrics;
 use crate::processors::RawConfigProcessor;
-use crate::sources::ConfigSource;
+use crate::tokio_sources::ConfigSource;
+use crate::util::{FailureFn, FallbackFn, Holder, UpdateFn, Result, Error};
 
 pub struct FullDatasetCache<O> {
     collection: Arc<O>,
