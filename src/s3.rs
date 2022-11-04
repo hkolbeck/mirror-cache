@@ -4,15 +4,15 @@ use reqwest::StatusCode;
 use crate::cache::Result;
 use crate::sources::ConfigSource;
 
-pub struct S3ObjectConfigSource {
+pub struct S3ConfigSource {
     client: Client,
     bucket: String,
     path: String,
 }
 
-impl S3ObjectConfigSource {
-    pub fn new<S: Into<String>>(client: Client, bucket: S, path: S) -> S3ObjectConfigSource {
-        S3ObjectConfigSource {
+impl S3ConfigSource {
+    pub fn new<S: Into<String>>(client: Client, bucket: S, path: S) -> S3ConfigSource {
+        S3ConfigSource {
             client,
             bucket: bucket.into(),
             path: path.into()
@@ -20,7 +20,7 @@ impl S3ObjectConfigSource {
     }
 }
 
-impl ConfigSource<DateTime, ByteStream> for S3ObjectConfigSource {
+impl ConfigSource<DateTime, ByteStream> for S3ConfigSource {
     fn fetch(&self) -> Result<(Option<DateTime>, ByteStream)> {
         let resp = futures::executor::block_on(self.client.get_object()
             .bucket(self.bucket.clone())

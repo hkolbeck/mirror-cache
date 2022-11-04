@@ -3,13 +3,13 @@ use octocrab::repos::RepoHandler;
 use crate::sources::ConfigSource;
 use crate::cache::{Error, Result};
 
-pub struct GithubConfigSource {
+pub struct GitHubConfigSource {
     repo: RepoHandler<'static>,
     branch: String,
     path: String,
 }
 
-impl ConfigSource<String, Cursor<Vec<u8>>> for GithubConfigSource {
+impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
     fn fetch(&self) -> Result<(Option<String>, Cursor<Vec<u8>>)> {
         let content_items = futures::executor::block_on(
             self.repo.get_content()

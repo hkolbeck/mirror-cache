@@ -24,21 +24,22 @@ Usage
 Cache instances are constructed using a builder, which is retrieved by calling
 `FullDatasetCache::<UpdatingMap<$Key, $Value>>::map_builder()` or 
 `FullDatasetCache::<UpdatingSet<$Value>>::set_builder()` depending on the desired collection
-type. See the appropriate section below for more details on each of the builder functions.
+type. Thanks to rust's type checker, your code won't compile if required fields are unset.
+See the appropriate section below for more details on each of the builder functions.
 
 ```rust
 fn make_cache() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| {/* Parsing! */});
-
-    FullDatasetCache::<UpdatingMap<K, V>>::map_builder()
+  
+    FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder()
         // These are required.
         .with_source(source)
         .with_processor(processor)
         .with_fetch_interval(Duration::from_secs(10))
         // These are optional
         .with_name("my-cache")
-        .with_fallback(0, Fallback::with_value(HashMap::new()))
+        .with_fallback(Fallback::with_value(HashMap::new()))
         .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v)))
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
         .with_metrics(ExampleMetrics::new())
@@ -53,11 +54,12 @@ Sources
 While users may implement their own, a number of sources are provided:
 - `LocalFileConfigSource` wraps a file on the local file system, provided with core library.
 - `HttpConfigSource` wraps a [reqwest](https://github.com/seanmonstar/reqwest) client and 
-  fetches data over the network via HTTP(S). Currently in the core, will soon require
-  `features = ["http"]`.
+  fetches data over the network via HTTP(S). Requires `features = ["http"]`.
+- `S3ConfigSource` exposes an object in S3. Requires `features = ["s3"]`.
+- `GcsConfigSource` exposes an object in Google Cloud Storage. Requires `features = ["gcs"]`
+- `GitHubConfigSource` exposes a file on GitHub. Requires `features = ["github"]`.
 
-In the future, sources will be provided for SQL databases as well as files in Amazon S3 or 
-Google Cloud Storage. Suggestions for other sources are welcome. Ideally, backends will 
+Suggestions for other sources are welcome. Ideally, backends will 
 support some get-if-newer functionality. Those that don't can still be used, but 
 implementations will have to issue an unconditional fetch every time and care should be 
 taken when choosing the fetch interval.
@@ -103,7 +105,7 @@ In order to make useful guarantees, the cache must complete an initial fetch whe
 is invoked. By default, if that fetch fails, `build()` will return an error. If a fallback
 is provided, it will be used until a successful fetch can be completed. This can be 
 important, as a backing data source going unavailable can cause new service instances to
-not come up if they just `unwrap()`.
+not come up if they just `unwrap()` after `build()`.
 
 
 Metrics
@@ -120,7 +122,7 @@ See [metrics.rs](./src/metrics.rs) for other metrics that can be collected.
 Demonstration
 =============
 
-The following is a log of [the provided example](./src/bin/example.rs), edited with comments. 
+The following is a log of [the provided example](./src/bin/local-example.rs), edited with comments. 
 The example sets up a cache backed by a local file of `key=value` pairs, where `value` is an
 i32, then loops forever printing the value of the key `C`. It's very noisy, as the example 
 metrics implementation just calls `println!()`.
