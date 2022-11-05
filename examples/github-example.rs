@@ -59,7 +59,7 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     if let Some((k, v)) = raw.split_once('=') {
         Ok(Some((String::from(k), i32::from_str(v)?)))
     } else {
-        Err(Error::new(format!("Failed to parse '{}'", raw).as_str()))
+        Err(Error::new(format!("Failed to parse '{}'", raw)))
     }
 }
 

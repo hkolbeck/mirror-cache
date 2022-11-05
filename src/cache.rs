@@ -52,7 +52,7 @@ impl<O: 'static> MirrorCache<O> {
                             m.fallback_invoked();
                         }
                     },
-                    None => return Err(Error::new(format!("Couldn't complete initial fetch: {}", e).as_str())),
+                    None => return Err(Error::new(format!("Couldn't complete initial fetch: {}", e))),
                 }
             },
             Ok(init) => {

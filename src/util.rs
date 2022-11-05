@@ -19,16 +19,16 @@ impl Display for Error {
 }
 
 impl Error {
-    pub fn new(msg: &str) -> Error {
+    pub fn new<S: Into<String>>(msg: S) -> Error {
         Error {
-            msg: String::from(msg)
+            msg: msg.into()
         }
     }
 }
 
 impl<E: std::error::Error> From<E> for Error {
     fn from(e: E) -> Self {
-        Error::new(e.to_string().as_str())
+        Error::new(e.to_string())
     }
 }
 

@@ -1,5 +1,4 @@
 use std::io::Cursor;
-use octocrab::Octocrab;
 
 #[cfg(not(feature = "tokio-cache"))]
 use tokio::runtime::Runtime;
@@ -11,73 +10,51 @@ use crate::tokio_sources::ConfigSource;
 #[cfg(feature = "tokio-cache")]
 use async_trait::async_trait;
 
+use reqwest::Client;
+use serde_derive::Deserialize;
 use crate::util::{Error, Result};
 
 pub struct GitHubConfigSource {
-    client: Octocrab,
-    owner: String,
-    repo: String,
-    branch: String,
-    path: String,
+    client: GitHubClient,
     #[cfg(not(feature = "tokio-cache"))]
     rt: Runtime,
 }
 
 impl GitHubConfigSource {
-    pub fn new<S: Into<String>>(octocrab: Octocrab, owner: S, repo: S, branch: S, path: S) -> Result<GitHubConfigSource> {
+    pub fn new<S: Into<String>>(
+        client: Client, token: S, owner: S, repo: S, branch: S, path: S,
+    ) -> Result<GitHubConfigSource> {
         Ok(GitHubConfigSource {
-            client: octocrab,
-            owner: owner.into(),
-            repo: repo.into(),
-            branch: branch.into(),
-            path: path.into(),
+            client: GitHubClient {
+                client,
+                token: token.into(),
+                owner: owner.into(),
+                repo: repo.into(),
+                branch: branch.into(),
+                path: path.into(),
+            },
             #[cfg(not(feature = "tokio-cache"))]
             rt: tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?,
         })
     }
-
 }
 
 #[cfg(not(feature = "tokio-cache"))]
 impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
     fn fetch(&self) -> Result<(Option<String>, Cursor<Vec<u8>>)> {
-        let handler = self.client.repos(self.owner.clone(), self.repo.clone());
-        let content_items = self.rt.block_on(
-            handler.get_content()
-                .r#ref(self.branch.clone())
-                .path(self.path.clone())
-                .send()
-        )?;
-
-        if let Some(content_wrapper) = content_items.items.first() {
-            if let Some(raw_content) = content_wrapper.decoded_content() {
-                Ok((Some(content_wrapper.sha.clone()), Cursor::new(raw_content.into())))
-            } else {
-                Err(Error::new("File had no content, or it failed to decode"))
-            }
-        } else {
-            Err(Error::new("File not found"))
-        }
+        let (sha, content) = self.rt.block_on(self.client.get_content())?;
+        Ok((Some(sha), Cursor::new(content)))
     }
 
     fn fetch_if_newer(&self, version: &String) -> Result<Option<(Option<String>, Cursor<Vec<u8>>)>> {
-        let handler = self.client.repos(self.owner.clone(), self.repo.clone());
-        let commits = self.rt.block_on(
-            handler.list_commits()
-                .branch(self.branch.clone())
-                .path(self.path.clone())
-                .send()
-        )?;
-
-        if let Some(last_commit) = commits.items.first() {
-            if &last_commit.sha == version {
-                return Ok(None);
-            }
+        let last_commit = self.rt.block_on(self.client.get_last_commit())?;
+        if &last_commit == version {
+            Ok(None)
+        } else {
+            self.fetch().map(Some)
         }
-
-        self.fetch().map(Some)
     }
 }
 
@@ -85,30 +62,12 @@ impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
 #[async_trait]
 impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
     async fn fetch(&self) -> Result<(Option<String>, Cursor<Vec<u8>>)> {
-        let handler = self.client.repos(self.owner.clone(), self.repo.clone());
-        let content_items = handler.get_content()
-                .r#ref(self.branch.clone())
-                .path(self.path.clone())
-                .send().await?;
-
-        if let Some(content_wrapper) = content_items.items.first() {
-            if let Some(raw_content) = content_wrapper.decoded_content() {
-                Ok((Some(content_wrapper.sha.clone()), Cursor::new(raw_content.into())))
-            } else {
-                Err(Error::new("File had no content, or it failed to decode"))
-            }
-        } else {
-            Err(Error::new("File not found"))
-        }
+        let (sha, content) = self.client.get_content().await?;
+        Ok((Some(sha), Cursor::new(content)))
     }
 
     async fn fetch_if_newer(&self, version: &String) -> Result<Option<(Option<String>, Cursor<Vec<u8>>)>> {
-        let handler = self.client.repos(self.owner.clone(), self.repo.clone());
-        let commits = handler.list_commits()
-                .branch(self.branch.clone())
-                .path(self.path.clone())
-                .send().await?;
-
+        let commits = self.client.get_last_commit().await?;
         if let Some(last_commit) = commits.items.first() {
             if &last_commit.sha == version {
                 return Ok(None);
@@ -116,5 +75,81 @@ impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
         }
 
         self.fetch().await.map(Some)
+    }
+}
+
+#[derive(Deserialize)]
+struct Commit {
+    sha: String,
+}
+
+#[derive(Deserialize)]
+struct FileContent {
+    pub sha: String,
+    pub content: Option<String>,
+}
+
+struct GitHubClient {
+    client: Client,
+    token: String,
+    owner: String,
+    repo: String,
+    branch: String,
+    path: String,
+}
+
+impl GitHubClient {
+    async fn get_last_commit(&self) -> Result<String> {
+        let url = format!(
+            "repos/{owner}/{repo}/commits?per_page=1&sha={branch}&path={path}",
+            owner = self.owner,
+            repo = self.repo,
+            branch = self.branch,
+            path = self.path,
+        );
+
+        let body = self.get(url).await?;
+        let commits: Vec<Commit> = serde_json::from_str(body.as_str())?;
+        if let Some(commit) = commits.first() {
+            Ok(commit.sha.clone())
+        } else {
+            Err(Error::new("No commits returned"))
+        }
+    }
+
+    async fn get_content(&self) -> Result<(String, Vec<u8>)> {
+        let url = format!(
+            "repos/{owner}/{repo}/contents/{path}?ref={branch}",
+            owner = self.owner,
+            repo = self.repo,
+            path = self.path,
+            branch = self.branch,
+        );
+
+        let body = self.get(url).await?;
+        let resp: Vec<FileContent> = serde_json::from_str(body.as_str())?;
+        if let Some(content) = resp.first() {
+            if let Some(encoded_content) = content.content.as_ref() {
+                let vec = base64::decode(encoded_content)?;
+                Ok((content.sha.clone(), vec))
+            } else {
+                Ok((content.sha.clone(), vec![]))
+            }
+        } else {
+            Err(Error::new("No content returned by GitHub"))
+        }
+    }
+
+    async fn get(&self, url: String) -> Result<String> {
+        let response = self.client.get(url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Accept", "application/vnd.github+json")
+            .send().await?;
+
+        if response.status().is_success() {
+            Ok(response.text().await?)
+        } else {
+            Err(Error::new(format!("Request failed with status: {}", response.status())))
+        }
     }
 }
