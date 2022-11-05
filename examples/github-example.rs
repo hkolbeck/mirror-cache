@@ -4,12 +4,12 @@ use std::thread::sleep;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use octocrab::Octocrab;
-use full_dataset_cache::processors::RawLineMapProcessor;
-use full_dataset_cache::cache::{Error, Fallback, FullDatasetCache, OnFailure, OnUpdate, Result};
-use full_dataset_cache::collections::UpdatingMap;
-use full_dataset_cache::github::GitHubConfigSource;
-use full_dataset_cache::metrics::Metrics;
-use full_dataset_cache::util::{Result, Error};
+use mirror_cache::processors::RawLineMapProcessor;
+use mirror_cache::util::{Error, Fallback, OnFailure, OnUpdate, Result};
+use mirror_cache::collections::UpdatingMap;
+use mirror_cache::github::GitHubConfigSource;
+use mirror_cache::metrics::Metrics;
+use mirror_cache::cache::MirrorCache;
 
 fn main() {
     let octocrab = Octocrab::builder()
@@ -26,7 +26,7 @@ fn main() {
 
     let processor = RawLineMapProcessor::new(parse_line);
 
-    let cache = FullDatasetCache::<UpdatingMap<String, String, i32>>::map_builder()
+    let cache = MirrorCache::<UpdatingMap<String, String, i32>>::map_builder()
         // These are required.
         .with_source(source)
         .with_processor(processor)
@@ -43,7 +43,7 @@ fn main() {
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
 
-    let map = cache.get_collection();
+    let map = cache.cache();
     loop {
         println!("C={}", map.get(&String::from("C")).unwrap_or_default());
         sleep(Duration::from_secs(3));
