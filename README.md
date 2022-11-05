@@ -128,7 +128,7 @@ See [metrics.rs](./src/metrics.rs) for other metrics that can be collected.
 Demonstration
 =============
 
-The following is a log of [the provided example](./src/bin/local-example.rs), edited with comments. 
+The following is a log of [the provided example](examples/local-example.rs), edited with comments. 
 The example sets up a cache backed by a local file of `key=value` pairs, where `value` is an
 i32, then loops forever printing the value of the key `C`. It's very noisy, as the example 
 metrics implementation just calls `println!()`.

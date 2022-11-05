@@ -1,28 +1,26 @@
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
-use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use parking_lot::RwLock;
 use scheduled_thread_pool::ScheduledThreadPool;
 use crate::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
 use crate::metrics::Metrics;
 use crate::processors::RawConfigProcessor;
 use crate::sources::ConfigSource;
-use crate::util::Holder;
+use crate::util::{Holder, Result, Error, UpdateFn, FailureFn, FallbackFn, Absent};
 
-pub struct FullDatasetCache<O> {
+pub struct MirrorCache<O> {
     cache: Arc<O>,
 
     #[allow(dead_code)]
     scheduler: ScheduledThreadPool,
 }
 
-impl<O: 'static> FullDatasetCache<O> {
+impl<O: 'static> MirrorCache<O> {
     #[allow(clippy::too_many_arguments)]
     fn construct_and_start<
         T: Send + Sync + 'static,
@@ -38,10 +36,10 @@ impl<O: 'static> FullDatasetCache<O> {
         name: Option<String>, source: C, processor: P, interval: Duration,
         on_update: Option<U>, on_failure: Option<F>, mut metrics: Option<M>,
         fallback: Option<A>, constructor: fn(Holder<E, T>) -> O,
-    ) -> Result<FullDatasetCache<O>> {
+    ) -> Result<MirrorCache<O>> {
         let holder: Holder<E, T> = Arc::new(RwLock::new(Arc::new(None)));
         let update_fn =
-            FullDatasetCache::<O>::get_update_fn(holder.clone(), source, processor);
+            MirrorCache::<O>::get_update_fn(holder.clone(), source, processor);
         let initial_fetch = update_fn(metrics.as_mut());
 
         match initial_fetch.as_ref() {
@@ -108,7 +106,7 @@ impl<O: 'static> FullDatasetCache<O> {
             }
         });
 
-        Ok(FullDatasetCache {
+        Ok(MirrorCache {
             cache,
             scheduler,
         })
@@ -219,7 +217,7 @@ impl<O: 'static> FullDatasetCache<O> {
         C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, Arc<V>> + Send + Sync + 'static,
         D: Into<Duration>
-    >() -> Builder<UpdatingObject<E, Arc<V>>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent>{
+    >() -> Builder<UpdatingObject<E, V>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent>{
         builder(UpdatingObject::new)
     }
 }
@@ -261,7 +259,7 @@ impl<
     F: FailureFn<E> + Send + Sync + 'static,
     A: FallbackFn<T> + 'static,
     M: Metrics<E> + Sync + Send + 'static
-> Builder<O, T, S, E, C, P, U, F, A, M> {
+> Builder<O, T, S, E, C, P, D, U, F, A, M> {
     pub fn with_name<N: Into<String>>(mut self, name: N) -> Builder<O, T, S, E, C, P, D, U, F, A, M> {
         self.name = Some(name.into());
         self
@@ -278,7 +276,7 @@ impl<
     }
 
     pub fn with_fetch_interval(mut self, fetch_interval: D) -> Builder<O, T, S, E, C, P, D, U, F, A, M> {
-        self.fetch_interval = Some(fetch_interval.into());
+        self.fetch_interval = Some(fetch_interval);
         self
     }
 
@@ -342,7 +340,7 @@ impl<
         }
     }
 
-    pub fn build(self) -> Result<FullDatasetCache<O>> {
+    pub fn build(self) -> Result<MirrorCache<O>> {
         if self.config_source.is_none() {
             return Err(Error::new("No config source specified"));
         }
@@ -355,11 +353,11 @@ impl<
             return Err(Error::new("No  fetch interval specified"));
         }
 
-        FullDatasetCache::construct_and_start(
+        MirrorCache::construct_and_start(
             self.name,
             self.config_source.unwrap(),
             self.config_processor.unwrap(),
-            self.fetch_interval.unwrap(),
+            self.fetch_interval.unwrap().into(),
             self.update_callback,
             self.failure_callback,
             self.metrics,

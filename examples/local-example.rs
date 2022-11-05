@@ -13,7 +13,7 @@ use full_dataset_cache::processors::RawLineMapProcessor;
 #[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::sources::LocalFileConfigSource;
 #[cfg(not(feature = "tokio-cache"))]
-use full_dataset_cache::cache::{Error, Fallback, FullDatasetCache, OnFailure, OnUpdate, Result};
+use full_dataset_cache::cache::{Error, Fallback, MirrorCache, OnFailure, OnUpdate, Result};
 #[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::collections::UpdatingMap;
 #[cfg(not(feature = "tokio-cache"))]
@@ -27,7 +27,7 @@ fn main() {
     let source = LocalFileConfigSource::new("./src/bin/my.config");
     let processor = RawLineMapProcessor::new(parse_line);
 
-    let cache = FullDatasetCache::<UpdatingMap<u128, String, i32>>::map_builder()
+    let cache = MirrorCache::<UpdatingMap<u128, String, i32>>::map_builder()
         // These are required.
         .with_source(source)
         .with_processor(processor)

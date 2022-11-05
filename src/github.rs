@@ -1,15 +1,15 @@
 use std::io::Cursor;
-use async_trait::async_trait;
 use octocrab::Octocrab;
 
 #[cfg(not(feature = "tokio-cache"))]
 use tokio::runtime::Runtime;
-
 #[cfg(not(feature = "tokio-cache"))]
 use crate::sources::ConfigSource;
 
 #[cfg(feature = "tokio-cache")]
 use crate::tokio_sources::ConfigSource;
+#[cfg(feature = "tokio-cache")]
+use async_trait::async_trait;
 
 use crate::util::{Error, Result};
 

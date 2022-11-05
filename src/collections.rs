@@ -16,7 +16,7 @@ impl<E, T> UpdatingObject<E, T> {
         }
     }
 
-    pub fn get(&self) -> Arc<T> {
+    pub fn get_current(&self) -> Arc<T> {
         match self.backing.read().as_ref() {
             None => panic!("{}", NON_RUNNING),
             Some((_, a)) => a.clone()

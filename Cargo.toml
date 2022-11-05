@@ -1,5 +1,5 @@
 [package]
-name = "full-dataset-cache"
+name = "mirror-cache"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,7 +16,7 @@ tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"], optional
 async-trait = { version = "0.1.58", optional = true }
 
 [features]
-default = ["github", "tokio-cache"]
+default = ["github"]
 http = ["reqwest"]
 s3 = ["aws-sdk-s3", "tokio"]
 #gcs = ["google-cloud-storage", "tokio"]

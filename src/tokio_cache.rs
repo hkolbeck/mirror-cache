@@ -14,14 +14,14 @@ use crate::processors::RawConfigProcessor;
 use crate::tokio_sources::ConfigSource;
 use crate::util::{FailureFn, FallbackFn, Holder, UpdateFn, Result, Error, Absent};
 
-pub struct FullDatasetCache<O> {
+pub struct MirrorCache<O> {
     collection: Arc<O>,
 
     #[allow(dead_code)]
     join_handle: JoinHandle<()>,
 }
 
-impl<O: 'static> FullDatasetCache<O> {
+impl<O: 'static> MirrorCache<O> {
     #[allow(clippy::too_many_arguments)]
     async fn construct_and_start<
         T: Send + Sync + 'static,
@@ -37,7 +37,7 @@ impl<O: 'static> FullDatasetCache<O> {
         source: C, processor: P, interval: Duration,
         on_update: Option<U>, on_failure: Option<F>, maybe_metrics: Option<M>,
         fallback: Option<A>, constructor: fn(Holder<E, T>) -> O,
-    ) -> Result<FullDatasetCache<O>> {
+    ) -> Result<MirrorCache<O>> {
         let holder: Holder<E, T> = Arc::new(RwLock::new(Arc::new(None)));
         let metrics = maybe_metrics.map(Arc::new);
         let updater =
@@ -83,7 +83,7 @@ impl<O: 'static> FullDatasetCache<O> {
         let forever = task::spawn(fetch_loop(holder, updater, interval, on_update, on_failure)
         );
 
-        Ok(FullDatasetCache {
+        Ok(MirrorCache {
             collection,
             join_handle: forever,
         })
@@ -375,7 +375,7 @@ impl<
         }
     }
 
-    pub async fn build(self) -> Result<FullDatasetCache<O>> {
+    pub async fn build(self) -> Result<MirrorCache<O>> {
         if self.config_source.is_none() {
             return Err(Error::new("No config source specified"));
         }
@@ -388,7 +388,7 @@ impl<
             return Err(Error::new("No  fetch interval specified"));
         }
 
-        FullDatasetCache::construct_and_start(
+        MirrorCache::construct_and_start(
             self.config_source.unwrap(),
             self.config_processor.unwrap(),
             self.fetch_interval.unwrap().into(),

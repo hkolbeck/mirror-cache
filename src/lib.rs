@@ -1,15 +1,12 @@
 extern crate core;
 
-
 #[cfg(feature = "tokio-cache")]
 pub mod tokio_cache;
-
-#[cfg(not(feature = "tokio-cache"))]
-pub mod cache;
-
 #[cfg(feature = "tokio-cache")]
 pub mod tokio_sources;
 
+#[cfg(not(feature = "tokio-cache"))]
+pub mod cache;
 #[cfg(not(feature = "tokio-cache"))]
 pub mod sources;
 
