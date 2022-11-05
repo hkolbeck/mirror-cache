@@ -1,15 +1,32 @@
+#[cfg(not(feature = "tokio-cache"))]
 use std::collections::HashMap;
+#[cfg(not(feature = "tokio-cache"))]
 use std::str::FromStr;
+#[cfg(not(feature = "tokio-cache"))]
 use std::thread::sleep;
+#[cfg(not(feature = "tokio-cache"))]
 use std::time::Duration;
+#[cfg(not(feature = "tokio-cache"))]
 use chrono::{DateTime, Utc};
+#[cfg(not(feature = "tokio-cache"))]
 use octocrab::Octocrab;
+#[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::processors::RawLineMapProcessor;
+#[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::cache::{Error, Fallback, FullDatasetCache, OnFailure, OnUpdate, Result};
+#[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::collections::UpdatingMap;
+#[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::github::GitHubConfigSource;
+#[cfg(not(feature = "tokio-cache"))]
 use full_dataset_cache::metrics::Metrics;
+#[cfg(not(feature = "tokio-cache"))]
+use full_dataset_cache::util::{Result, Error};
 
+#[cfg(feature = "tokio-cache")]
+fn main() {}
+
+#[cfg(not(feature = "tokio-cache"))]
 fn main() {
     let octocrab = Octocrab::builder()
         .personal_token(std::env::var("GITHUB_TOKEN").unwrap())
@@ -20,7 +37,7 @@ fn main() {
         "hkolbeck",
         "config-example",
         "main",
-        "my.config"
+        "my.config",
     ).unwrap();
 
     let processor = RawLineMapProcessor::new(parse_line);
@@ -49,6 +66,7 @@ fn main() {
     }
 }
 
+#[cfg(not(feature = "tokio-cache"))]
 fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     if raw.trim().is_empty() || raw.starts_with('#') {
         return Ok(None);
@@ -61,38 +79,41 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     }
 }
 
+#[cfg(not(feature = "tokio-cache"))]
 struct ExampleMetrics {}
 
+#[cfg(not(feature = "tokio-cache"))]
 impl Metrics<String> for ExampleMetrics {
-    fn update(&mut self, _new_version: &Option<String>, fetch_time: Duration, process_time: Duration) {
+    fn update(&self, _new_version: &Option<String>, fetch_time: Duration, process_time: Duration) {
         println!("Update fetch took {}ms and process took {}ms", fetch_time.as_millis(), process_time.as_millis());
     }
 
-    fn last_successful_update(&mut self, ts: &DateTime<Utc>) {
+    fn last_successful_update(&self, ts: &DateTime<Utc>) {
         println!("Last successful update is now at {}", ts);
     }
 
-    fn check_no_update(&mut self, check_time: &Duration) {
+    fn check_no_update(&self, check_time: &Duration) {
         println!("File hasn't changed. Check in {}ms", check_time.as_millis())
     }
 
-    fn last_successful_check(&mut self, ts: &DateTime<Utc>) {
+    fn last_successful_check(&self, ts: &DateTime<Utc>) {
         println!("Last successful check is now at {}", ts);
     }
 
-    fn fallback_invoked(&mut self) {
+    fn fallback_invoked(&self) {
         println!("Fallback invoked!");
     }
 
-    fn fetch_error(&mut self, err: &Error) {
+    fn fetch_error(&self, err: &Error) {
         println!("Fetch failed with: '{}'", err)
     }
 
-    fn process_error(&mut self, err: &Error) {
+    fn process_error(&self, err: &Error) {
         println!("Process failed with: '{}'", err)
     }
 }
 
+#[cfg(not(feature = "tokio-cache"))]
 impl ExampleMetrics {
     fn new() -> ExampleMetrics {
         ExampleMetrics {}
