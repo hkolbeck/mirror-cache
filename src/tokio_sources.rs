@@ -12,11 +12,11 @@ pub trait ConfigSource<E, S> {
     async fn fetch_if_newer(&self, version: &E) -> Result<Option<(Option<E>, S)>>;
 }
 
-pub struct LocalFileConfigSource<P: AsRef<Path>> {
+pub struct LocalFileConfigSource<P: AsRef<Path> + Send + Sync> {
     path: P,
 }
 
-impl<P: AsRef<Path>> LocalFileConfigSource<P> {
+impl<P: AsRef<Path> + Send + Sync> LocalFileConfigSource<P> {
     pub fn new(path: P) -> LocalFileConfigSource<P> {
         LocalFileConfigSource {
             path
@@ -25,7 +25,7 @@ impl<P: AsRef<Path>> LocalFileConfigSource<P> {
 }
 
 #[async_trait]
-impl<P: AsRef<Path>> ConfigSource<u128, BufReader<File>> for LocalFileConfigSource<P> {
+impl<P: AsRef<Path> + Send + Sync> ConfigSource<u128, BufReader<File>> for LocalFileConfigSource<P> {
     async fn fetch(&self) -> Result<(Option<u128>, BufReader<File>)> {
         let file = File::open(&self.path)?;
         let metadata = file.metadata()?;

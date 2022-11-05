@@ -1,13 +1,32 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
-use crate::cache::Holder;
+use crate::util::Holder;
+
+const NON_RUNNING: &str = "Attempt to read collection from non-running update service";
+
+pub struct UpdatingObject<E, T> {
+    backing: Holder<E, Arc<T>>
+}
+
+impl<E, T> UpdatingObject<E, T> {
+    pub(crate) fn new(backing: Holder<E, Arc<T>>) -> UpdatingObject<E, T> {
+        UpdatingObject {
+            backing
+        }
+    }
+
+    pub fn get(&self) -> Arc<T> {
+        match self.backing.read().as_ref() {
+            None => panic!("{}", NON_RUNNING),
+            Some((_, a)) => a.clone()
+        }
+    }
+}
 
 pub struct UpdatingSet<E, T: Eq + Hash + Send + Sync> {
     backing: Holder<E, HashSet<T>>
 }
-
-const NON_RUNNING: &str = "Attempt to read collection from non-running update service";
 
 impl<E, T: Eq + Hash + Send + Sync> UpdatingSet<E, T> {
     pub(crate) fn new(backing: Holder<E, HashSet<T>>) -> UpdatingSet<E, T> {

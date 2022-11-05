@@ -2,8 +2,10 @@ use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::result;
 use std::sync::Arc;
+use std::time::Duration;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
+use crate::metrics::Metrics;
 
 #[derive(Debug)]
 pub struct Error {
@@ -105,3 +107,53 @@ impl<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> OnFailure<E, F> {
 }
 
 pub(crate) type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
+
+pub struct Absent {}
+
+impl<E, T> UpdateFn<T, E> for Absent {
+    fn updated(&self, _previous: &Option<(Option<E>, T)>, _new_version: &Option<E>, _new_dataset: &T) {
+        panic!("Should never be called");
+    }
+}
+
+impl<T> FallbackFn<T> for Absent {
+    fn get_fallback(self) -> T {
+        panic!("Should never be called");
+    }
+}
+
+impl<E> FailureFn<E> for Absent {
+    fn failed(&self, _err: &Error, _last_version_and_ts: Option<(Option<E>, DateTime<Utc>)>) {
+        panic!("Should never be called");
+    }
+}
+
+impl<E> Metrics<E> for Absent {
+    fn update(&self, _new_version: &Option<E>, _fetch_time: Duration, _process_time: Duration) {
+        panic!("Should never be called");
+    }
+
+    fn last_successful_update(&self, _ts: &DateTime<Utc>) {
+        panic!("Should never be called");
+    }
+
+    fn check_no_update(&self, _check_time: &Duration) {
+        panic!("Should never be called");
+    }
+
+    fn last_successful_check(&self, _ts: &DateTime<Utc>) {
+        panic!("Should never be called");
+    }
+
+    fn fallback_invoked(&self) {
+        panic!("Should never be called");
+    }
+
+    fn fetch_error(&self, _err: &Error) {
+        panic!("Should never be called");
+    }
+
+    fn process_error(&self, _err: &Error) {
+        panic!("Should never be called");
+    }
+}

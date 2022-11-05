@@ -9,13 +9,14 @@ use std::time::{Duration, Instant, SystemTime};
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use scheduled_thread_pool::ScheduledThreadPool;
-use crate::collections::{UpdatingMap, UpdatingSet};
+use crate::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
 use crate::metrics::Metrics;
 use crate::processors::RawConfigProcessor;
 use crate::sources::ConfigSource;
+use crate::util::Holder;
 
 pub struct FullDatasetCache<O> {
-    collection: Arc<O>,
+    cache: Arc<O>,
 
     #[allow(dead_code)]
     scheduler: ScheduledThreadPool,
@@ -80,7 +81,7 @@ impl<O: 'static> FullDatasetCache<O> {
         };
 
         let mut last_success = DateTime::from(SystemTime::now());
-        let collection = Arc::new(constructor(holder.clone()));
+        let cache = Arc::new(constructor(holder.clone()));
         let scheduler = match name {
             Some(n) => ScheduledThreadPool::with_name(n.as_str(), 1),
             None => ScheduledThreadPool::new(1),
@@ -108,13 +109,13 @@ impl<O: 'static> FullDatasetCache<O> {
         });
 
         Ok(FullDatasetCache {
-            collection,
+            cache,
             scheduler,
         })
     }
 
-    pub fn get_collection(&self) -> Arc<O> {
-        self.collection.clone()
+    pub fn cache(&self) -> Arc<O> {
+        self.cache.clone()
     }
 
     fn get_update_fn<
@@ -188,7 +189,6 @@ impl<O: 'static> FullDatasetCache<O> {
         }
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn map_builder<
         K: Eq + Hash + Send + Sync + 'static,
         V: Send + Sync + 'static,
@@ -196,19 +196,31 @@ impl<O: 'static> FullDatasetCache<O> {
         E: Sync + Send + 'static,
         C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashMap<K, Arc<V>>> + Send + Sync + 'static,
-    >() -> Builder<UpdatingMap<E, K, V>, HashMap<K, Arc<V>>, S, E, C, P, Absent, Absent, Absent, Absent> {
+        D: Into<Duration>,
+    >() -> Builder<UpdatingMap<E, K, V>, HashMap<K, Arc<V>>, S, E, C, P, D, Absent, Absent, Absent, Absent> {
         builder(UpdatingMap::new)
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn set_builder<
         V: Eq + Hash + Send + Sync + 'static,
         S: 'static,
         E: Sync + Send + 'static,
         C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, HashSet<V>> + Send + Sync + 'static,
-    >() -> Builder<UpdatingSet<E, V>, HashSet<V>, S, E, C, P, Absent, Absent, Absent, Absent> {
+        D: Into<Duration>,
+    >() -> Builder<UpdatingSet<E, V>, HashSet<V>, S, E, C, P, D, Absent, Absent, Absent, Absent> {
         builder(UpdatingSet::new)
+    }
+
+    pub fn object_builder<
+        V: Send + Sync + 'static,
+        S: 'static,
+        E: Sync + Send + 'static,
+        C: ConfigSource<E, S> + Send + Sync + 'static,
+        P: RawConfigProcessor<S, Arc<V>> + Send + Sync + 'static,
+        D: Into<Duration>
+    >() -> Builder<UpdatingObject<E, Arc<V>>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent>{
+        builder(UpdatingObject::new)
     }
 }
 
@@ -219,6 +231,7 @@ pub struct Builder<
     E,
     C,
     P,
+    D,
     U=Absent,
     F=Absent,
     A=Absent,
@@ -226,7 +239,7 @@ pub struct Builder<
 > {
     constructor: fn(Holder<E, T>) -> O,
     name: Option<String>,
-    fetch_interval: Option<Duration>,
+    fetch_interval: Option<D>,
     config_source: Option<C>,
     config_processor: Option<P>,
     failure_callback: Option<F>,
@@ -243,32 +256,33 @@ impl<
     E: Send + Sync + Clone + 'static,
     C: ConfigSource<E, S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
+    D: Into<Duration> + Send + Sync + 'static,
     U: UpdateFn<T, E> + Send + Sync + 'static,
     F: FailureFn<E> + Send + Sync + 'static,
     A: FallbackFn<T> + 'static,
     M: Metrics<E> + Sync + Send + 'static
 > Builder<O, T, S, E, C, P, U, F, A, M> {
-    pub fn with_name<N: Into<String>>(mut self, name: N) -> Builder<O, T, S, E, C, P, U, F, A, M> {
+    pub fn with_name<N: Into<String>>(mut self, name: N) -> Builder<O, T, S, E, C, P, D, U, F, A, M> {
         self.name = Some(name.into());
         self
     }
 
-    pub fn with_source(mut self, source: C) -> Builder<O, T, S, E, C, P, U, F, A, M> {
+    pub fn with_source(mut self, source: C) -> Builder<O, T, S, E, C, P, D, U, F, A, M> {
         self.config_source = Some(source);
         self
     }
 
-    pub fn with_processor(mut self, processor: P) -> Builder<O, T, S, E, C, P, U, F, A, M> {
+    pub fn with_processor(mut self, processor: P) -> Builder<O, T, S, E, C, P, D, U, F, A, M> {
         self.config_processor = Some(processor);
         self
     }
 
-    pub fn with_fetch_interval(mut self, fetch_interval: Duration) -> Builder<O, T, S, E, C, P, U, F, A, M> {
-        self.fetch_interval = Some(fetch_interval);
+    pub fn with_fetch_interval(mut self, fetch_interval: D) -> Builder<O, T, S, E, C, P, D, U, F, A, M> {
+        self.fetch_interval = Some(fetch_interval.into());
         self
     }
 
-    pub fn with_update_callback<UU: UpdateFn<T, E>>(self, callback: UU) -> Builder<O, T, S, E, C, P, UU, F, A, M> {
+    pub fn with_update_callback<UU: UpdateFn<T, E>>(self, callback: UU) -> Builder<O, T, S, E, C, P, D, UU, F, A, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -283,7 +297,7 @@ impl<
         }
     }
 
-    pub fn with_failure_callback<FF: FailureFn<E>>(self, callback: FF) -> Builder<O, T, S, E, C, P, U, FF, A, M> {
+    pub fn with_failure_callback<FF: FailureFn<E>>(self, callback: FF) -> Builder<O, T, S, E, C, P, D, U, FF, A, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -298,7 +312,7 @@ impl<
         }
     }
 
-    pub fn with_metrics<MM: Metrics<E>>(self, metrics: MM) -> Builder<O, T, S, E, C, P, U, F, A, MM> {
+    pub fn with_metrics<MM: Metrics<E>>(self, metrics: MM) -> Builder<O, T, S, E, C, P, D, U, F, A, MM> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -313,7 +327,7 @@ impl<
         }
     }
 
-    pub fn with_fallback<AA: FallbackFn<T>>(self, fallback: AA) -> Builder<O, T, S, E, C, P, U, F, AA, M> {
+    pub fn with_fallback<AA: FallbackFn<T>>(self, fallback: AA) -> Builder<O, T, S, E, C, P, D, U, F, AA, M> {
         Builder {
             constructor: self.constructor,
             name: self.name,
@@ -362,7 +376,8 @@ fn builder<
     E,
     C: ConfigSource<E, S> + Send + Sync + 'static,
     P: RawConfigProcessor<S, T> + Send + Sync + 'static,
->(constructor: fn(Holder<E, T>) -> O) -> Builder<O, T, S, E, C, P, Absent, Absent, Absent, Absent> {
+    D: Into<Duration>,
+>(constructor: fn(Holder<E, T>) -> O) -> Builder<O, T, S, E, C, P, D, Absent, Absent, Absent, Absent> {
     Builder {
         constructor,
         name: None,
@@ -374,55 +389,5 @@ fn builder<
         fallback: None,
         metrics: None,
         phantom: PhantomData::default()
-    }
-}
-
-pub struct Absent {}
-
-impl<E, T> UpdateFn<T, E> for Absent {
-    fn updated(&self, _previous: &Option<(Option<E>, T)>, _new_version: &Option<E>, _new_dataset: &T) {
-        panic!("Should never be called");
-    }
-}
-
-impl<T> FallbackFn<T> for Absent {
-    fn get_fallback(self) -> T {
-        panic!("Should never be called");
-    }
-}
-
-impl<E> FailureFn<E> for Absent {
-    fn failed(&self, _err: &Error, _last_version_and_ts: Option<(Option<E>, DateTime<Utc>)>) {
-        panic!("Should never be called");
-    }
-}
-
-impl<E> Metrics<E> for Absent {
-    fn update(&mut self, _new_version: &Option<E>, _fetch_time: Duration, _process_time: Duration) {
-        panic!("Should never be called");
-    }
-
-    fn last_successful_update(&mut self, _ts: &DateTime<Utc>) {
-        panic!("Should never be called");
-    }
-
-    fn check_no_update(&mut self, _check_time: &Duration) {
-        panic!("Should never be called");
-    }
-
-    fn last_successful_check(&mut self, _ts: &DateTime<Utc>) {
-        panic!("Should never be called");
-    }
-
-    fn fallback_invoked(&mut self) {
-        panic!("Should never be called");
-    }
-
-    fn fetch_error(&mut self, _err: &Error) {
-        panic!("Should never be called");
-    }
-
-    fn process_error(&mut self, _err: &Error) {
-        panic!("Should never be called");
     }
 }

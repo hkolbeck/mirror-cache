@@ -26,6 +26,7 @@ fn main() {
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
 
+    // Collection instances are safe to hold on to, borrow, clone, or pass ownership of.
     let map = cache.get_collection();
     loop {
         println!("C={}", map.get(&String::from("C")).unwrap_or_default());
@@ -48,31 +49,31 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
 struct ExampleMetrics {}
 
 impl Metrics<u128> for ExampleMetrics {
-    fn update(&mut self, _new_version: &Option<u128>, fetch_time: Duration, process_time: Duration) {
+    fn update(&self, _new_version: &Option<u128>, fetch_time: Duration, process_time: Duration) {
         println!("Update fetch took {}ms and process took {}ms", fetch_time.as_millis(), process_time.as_millis());
     }
 
-    fn last_successful_update(&mut self, ts: &DateTime<Utc>) {
+    fn last_successful_update(&self, ts: &DateTime<Utc>) {
         println!("Last successful update is now at {}", ts);
     }
 
-    fn check_no_update(&mut self, check_time: &Duration) {
+    fn check_no_update(&self, check_time: &Duration) {
         println!("File hasn't changed. Check in {}ms", check_time.as_millis())
     }
 
-    fn last_successful_check(&mut self, ts: &DateTime<Utc>) {
+    fn last_successful_check(&self, ts: &DateTime<Utc>) {
         println!("Last successful check is now at {}", ts);
     }
 
-    fn fallback_invoked(&mut self) {
+    fn fallback_invoked(&self) {
         println!("Fallback invoked!");
     }
 
-    fn fetch_error(&mut self, err: &Error) {
+    fn fetch_error(&self, err: &Error) {
         println!("Fetch failed with: '{}'", err)
     }
 
-    fn process_error(&mut self, err: &Error) {
+    fn process_error(&self, err: &Error) {
         println!("Process failed with: '{}'", err)
     }
 }

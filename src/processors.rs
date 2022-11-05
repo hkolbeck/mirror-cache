@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::Arc;
-use crate::cache::Result;
+use crate::util::Result;
 
 pub trait RawConfigProcessor<S, T> {
     fn process(&self, raw: S) -> Result<T>;
