@@ -28,12 +28,14 @@ type. Thanks to rust's type checker, your code won't compile if required fields 
 See the appropriate section below for more details on each of the builder functions.
 
 ```rust
-fn make_cache() -> FullDatasetCache<UpdatingMap<K, V>> {
+// Note that this example is for the sync version of the library. An example of async usage can be 
+// found in [examples]()  
+fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| {/* Parsing! */});
   
-    FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder()
-        // These are required.
+    FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder() 
+        // These are required. Failing to specify any of these will cause typechecker errors.
         .with_source(source)
         .with_processor(processor)
         .with_fetch_interval(Duration::from_secs(10))
@@ -43,7 +45,11 @@ fn make_cache() -> FullDatasetCache<UpdatingMap<K, V>> {
         .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v)))
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
         .with_metrics(ExampleMetrics::new())
-        .build().unwrap()
+        .build().unwrap();
+
+
+    // Collection instances are safe to hold on to, borrow, clone, or pass ownership of.
+    let map = cache.get_collection();
 }
 ```
 
@@ -122,7 +128,7 @@ See [metrics.rs](./src/metrics.rs) for other metrics that can be collected.
 Demonstration
 =============
 
-The following is a log of [the provided example](./src/bin/local-example.rs), edited with comments. 
+The following is a log of [the provided example](examples/local-example.rs), edited with comments. 
 The example sets up a cache backed by a local file of `key=value` pairs, where `value` is an
 i32, then loops forever printing the value of the key `C`. It's very noisy, as the example 
 metrics implementation just calls `println!()`.

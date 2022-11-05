@@ -3,17 +3,30 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
+use octocrab::Octocrab;
 use full_dataset_cache::processors::RawLineMapProcessor;
-use full_dataset_cache::sources::LocalFileConfigSource;
 use full_dataset_cache::cache::{Error, Fallback, FullDatasetCache, OnFailure, OnUpdate, Result};
 use full_dataset_cache::collections::UpdatingMap;
+use full_dataset_cache::github::GitHubConfigSource;
 use full_dataset_cache::metrics::Metrics;
+use full_dataset_cache::util::{Result, Error};
 
 fn main() {
-    let source = LocalFileConfigSource::new("./src/bin/my.config");
+    let octocrab = Octocrab::builder()
+        .personal_token(std::env::var("GITHUB_TOKEN").unwrap())
+        .build().unwrap();
+
+    let source = GitHubConfigSource::new(
+        octocrab,
+        "hkolbeck",
+        "config-example",
+        "main",
+        "my.config",
+    ).unwrap();
+
     let processor = RawLineMapProcessor::new(parse_line);
 
-    let cache = FullDatasetCache::<UpdatingMap<u128, String, i32>>::map_builder()
+    let cache = FullDatasetCache::<UpdatingMap<String, String, i32>>::map_builder()
         // These are required.
         .with_source(source)
         .with_processor(processor)
@@ -21,8 +34,12 @@ fn main() {
         // These are optional
         .with_name("my-cache")
         .with_fallback(Fallback::with_value(HashMap::new()))
-        .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v.unwrap_or(0))))
-        .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
+        .with_update_callback(
+            OnUpdate::with_fn(
+                |_, v, _|
+                    println!("Updated to version {}", v.clone().unwrap_or_else(|| String::from("None")))))
+        .with_failure_callback(
+            OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
 
@@ -32,6 +49,7 @@ fn main() {
         sleep(Duration::from_secs(3));
     }
 }
+
 
 fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     if raw.trim().is_empty() || raw.starts_with('#') {
@@ -45,37 +63,40 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     }
 }
 
+
 struct ExampleMetrics {}
 
-impl Metrics<u128> for ExampleMetrics {
-    fn update(&mut self, _new_version: &Option<u128>, fetch_time: Duration, process_time: Duration) {
+
+impl Metrics<String> for ExampleMetrics {
+    fn update(&self, _new_version: &Option<String>, fetch_time: Duration, process_time: Duration) {
         println!("Update fetch took {}ms and process took {}ms", fetch_time.as_millis(), process_time.as_millis());
     }
 
-    fn last_successful_update(&mut self, ts: &DateTime<Utc>) {
+    fn last_successful_update(&self, ts: &DateTime<Utc>) {
         println!("Last successful update is now at {}", ts);
     }
 
-    fn check_no_update(&mut self, check_time: &Duration) {
+    fn check_no_update(&self, check_time: &Duration) {
         println!("File hasn't changed. Check in {}ms", check_time.as_millis())
     }
 
-    fn last_successful_check(&mut self, ts: &DateTime<Utc>) {
+    fn last_successful_check(&self, ts: &DateTime<Utc>) {
         println!("Last successful check is now at {}", ts);
     }
 
-    fn fallback_invoked(&mut self) {
+    fn fallback_invoked(&self) {
         println!("Fallback invoked!");
     }
 
-    fn fetch_error(&mut self, err: &Error) {
+    fn fetch_error(&self, err: &Error) {
         println!("Fetch failed with: '{}'", err)
     }
 
-    fn process_error(&mut self, err: &Error) {
+    fn process_error(&self, err: &Error) {
         println!("Process failed with: '{}'", err)
     }
 }
+
 
 impl ExampleMetrics {
     fn new() -> ExampleMetrics {

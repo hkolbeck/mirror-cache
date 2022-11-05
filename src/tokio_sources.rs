@@ -2,18 +2,21 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
+use async_trait::async_trait;
+
 use crate::util::Result;
 
+#[async_trait]
 pub trait ConfigSource<E, S> {
-    fn fetch(&self) -> Result<(Option<E>, S)>;
-    fn fetch_if_newer(&self, version: &E) -> Result<Option<(Option<E>, S)>>;
+    async fn fetch(&self) -> Result<(Option<E>, S)>;
+    async fn fetch_if_newer(&self, version: &E) -> Result<Option<(Option<E>, S)>>;
 }
 
-pub struct LocalFileConfigSource<P: AsRef<Path>> {
+pub struct LocalFileConfigSource<P: AsRef<Path> + Send + Sync> {
     path: P,
 }
 
-impl<P: AsRef<Path>> LocalFileConfigSource<P> {
+impl<P: AsRef<Path> + Send + Sync> LocalFileConfigSource<P> {
     pub fn new(path: P) -> LocalFileConfigSource<P> {
         LocalFileConfigSource {
             path
@@ -21,8 +24,9 @@ impl<P: AsRef<Path>> LocalFileConfigSource<P> {
     }
 }
 
-impl<P: AsRef<Path>> ConfigSource<u128, BufReader<File>> for LocalFileConfigSource<P> {
-    fn fetch(&self) -> Result<(Option<u128>, BufReader<File>)> {
+#[async_trait]
+impl<P: AsRef<Path> + Send + Sync> ConfigSource<u128, BufReader<File>> for LocalFileConfigSource<P> {
+    async fn fetch(&self) -> Result<(Option<u128>, BufReader<File>)> {
         let file = File::open(&self.path)?;
         let metadata = file.metadata()?;
         match metadata.modified() {
@@ -36,7 +40,7 @@ impl<P: AsRef<Path>> ConfigSource<u128, BufReader<File>> for LocalFileConfigSour
         }
     }
 
-    fn fetch_if_newer(&self, version: &u128) -> Result<Option<(Option<u128>, BufReader<File>)>> {
+    async fn fetch_if_newer(&self, version: &u128) -> Result<Option<(Option<u128>, BufReader<File>)>> {
         let file = File::open(&self.path)?;
         let metadata = file.metadata()?;
         match metadata.modified() {
