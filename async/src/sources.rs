@@ -3,8 +3,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 use async_trait::async_trait;
-
-use crate::util::Result;
+use mirror_cache_shared::util::Result;
 
 #[async_trait]
 pub trait ConfigSource<E, S> {

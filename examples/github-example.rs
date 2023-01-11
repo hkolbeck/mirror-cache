@@ -1,19 +1,6 @@
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::thread::sleep;
-use std::time::Duration;
-use chrono::{DateTime, Utc};
-use octocrab::Octocrab;
-use full_dataset_cache::processors::RawLineMapProcessor;
-use full_dataset_cache::cache::{Error, Fallback, FullDatasetCache, OnFailure, OnUpdate, Result};
-use full_dataset_cache::collections::UpdatingMap;
-use full_dataset_cache::github::GitHubConfigSource;
-use full_dataset_cache::metrics::Metrics;
-use full_dataset_cache::util::{Result, Error};
-
 fn main() {
     let octocrab = Octocrab::builder()
-        .personal_token(std::env::var("GITHUB_TOKEN").unwrap())
+        .personal_token(std::env::var("GITHUB_TOKEN").expect("No Github token specified!"))
         .build().unwrap();
 
     let source = GitHubConfigSource::new(
@@ -40,7 +27,7 @@ fn main() {
                     println!("Updated to version {}", v.clone().unwrap_or_else(|| String::from("None")))))
         .with_failure_callback(
             OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
-        .with_metrics(ExampleMetrics::new())
+        .with_metrics(ExampleMetrics {})
         .build().unwrap();
 
     let map = cache.get_collection();
@@ -49,7 +36,6 @@ fn main() {
         sleep(Duration::from_secs(3));
     }
 }
-
 
 fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     if raw.trim().is_empty() || raw.starts_with('#') {
@@ -63,9 +49,7 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     }
 }
 
-
 struct ExampleMetrics {}
-
 
 impl Metrics<String> for ExampleMetrics {
     fn update(&self, _new_version: &Option<String>, fetch_time: Duration, process_time: Duration) {
@@ -94,12 +78,5 @@ impl Metrics<String> for ExampleMetrics {
 
     fn process_error(&self, err: &Error) {
         println!("Process failed with: '{}'", err)
-    }
-}
-
-
-impl ExampleMetrics {
-    fn new() -> ExampleMetrics {
-        ExampleMetrics {}
     }
 }

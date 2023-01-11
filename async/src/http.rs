@@ -1,4 +1,5 @@
-use reqwest::blocking::{Client, Response};
+use async_trait::async_trait;
+use reqwest::{Client, Response};
 use reqwest::StatusCode;
 use crate::cache::{Error, Result};
 use crate::sources::ConfigSource;
@@ -28,9 +29,10 @@ impl HttpConfigSource {
     }
 }
 
+#[async_trait]
 impl ConfigSource<String, Response> for HttpConfigSource {
-    fn fetch(&self) -> Result<(Option<String>, Response)> {
-        let resp = self.client.get(self.url.as_str()).send()?;
+    async fn fetch(&self) -> Result<(Option<String>, Response)> {
+        let resp = self.client.get(self.url.as_str()).send().await?;
 
         if resp.status().is_success() {
             Ok((HttpConfigSource::get_version(&resp), resp))
@@ -39,10 +41,10 @@ impl ConfigSource<String, Response> for HttpConfigSource {
         }
     }
 
-    fn fetch_if_newer(&self, version: &String) -> Result<Option<(Option<String>, Response)>> {
+    async fn fetch_if_newer(&self, version: &String) -> Result<Option<(Option<String>, Response)>> {
         let resp = self.client.get(self.url.as_str())
             .header("If-Modified-Since", version)
-            .send()?;
+            .send().await?;
 
         if resp.status().is_success() {
             Ok(Some((HttpConfigSource::get_version(&resp), resp)))

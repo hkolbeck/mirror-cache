@@ -1,28 +1,3 @@
-#[cfg(not(feature = "tokio-cache"))]
-use std::collections::HashMap;
-#[cfg(not(feature = "tokio-cache"))]
-use std::str::FromStr;
-#[cfg(not(feature = "tokio-cache"))]
-use std::thread::sleep;
-#[cfg(not(feature = "tokio-cache"))]
-use std::time::Duration;
-#[cfg(not(feature = "tokio-cache"))]
-use chrono::{DateTime, Utc};
-#[cfg(not(feature = "tokio-cache"))]
-use full_dataset_cache::processors::RawLineMapProcessor;
-#[cfg(not(feature = "tokio-cache"))]
-use full_dataset_cache::sources::LocalFileConfigSource;
-#[cfg(not(feature = "tokio-cache"))]
-use full_dataset_cache::cache::{Error, Fallback, MirrorCache, OnFailure, OnUpdate, Result};
-#[cfg(not(feature = "tokio-cache"))]
-use full_dataset_cache::collections::UpdatingMap;
-#[cfg(not(feature = "tokio-cache"))]
-use full_dataset_cache::metrics::Metrics;
-
-#[cfg(feature = "tokio-cache")]
-fn main() {}
-
-#[cfg(not(feature = "tokio-cache"))]
 fn main() {
     let source = LocalFileConfigSource::new("./src/bin/my.config");
     let processor = RawLineMapProcessor::new(parse_line);
@@ -37,7 +12,7 @@ fn main() {
         .with_fallback(Fallback::with_value(HashMap::new()))
         .with_update_callback(OnUpdate::with_fn(|_, v, _| println!("Updated to version {}", v.unwrap_or(0))))
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
-        .with_metrics(ExampleMetrics::new())
+        .with_metrics(ExampleMetrics {})
         .build().unwrap();
 
     // Collection instances are safe to hold on to, borrow, clone, or pass ownership of.
@@ -48,7 +23,6 @@ fn main() {
     }
 }
 
-#[cfg(not(feature = "tokio-cache"))]
 fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     if raw.trim().is_empty() || raw.starts_with('#') {
         return Ok(None);
@@ -61,10 +35,8 @@ fn parse_line(raw: String) -> Result<Option<(String, i32)>> {
     }
 }
 
-#[cfg(not(feature = "tokio-cache"))]
 struct ExampleMetrics {}
 
-#[cfg(not(feature = "tokio-cache"))]
 impl Metrics<u128> for ExampleMetrics {
     fn update(&self, _new_version: &Option<u128>, fetch_time: Duration, process_time: Duration) {
         println!("Update fetch took {}ms and process took {}ms", fetch_time.as_millis(), process_time.as_millis());
@@ -92,12 +64,5 @@ impl Metrics<u128> for ExampleMetrics {
 
     fn process_error(&self, err: &Error) {
         println!("Process failed with: '{}'", err)
-    }
-}
-
-#[cfg(not(feature = "tokio-cache"))]
-impl ExampleMetrics {
-    fn new() -> ExampleMetrics {
-        ExampleMetrics {}
     }
 }

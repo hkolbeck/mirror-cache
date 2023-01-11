@@ -106,7 +106,7 @@ impl<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> OnFailure<E, F> {
     }
 }
 
-pub(crate) type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
+pub type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
 
 pub struct Absent {}
 
