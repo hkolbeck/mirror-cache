@@ -29,13 +29,13 @@ See the appropriate section below for more details on each of the builder functi
 
 ```rust
 // Note that this example is for the sync version of the library. An example of async usage can be 
-// found in [examples]()  
+// found in [examples](examples)  
 fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| {/* Parsing! */});
   
     FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder() 
-        // These are required. Failing to specify any of these will cause typechecker errors.
+        // These are required. Failing to specify any of these will cause type-checker errors.
         .with_source(source)
         .with_processor(processor)
         .with_fetch_interval(Duration::from_secs(10))
@@ -46,7 +46,6 @@ fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
-
 
     // Collection instances are safe to hold on to, borrow, clone, or pass ownership of.
     let map = cache.get_collection();
@@ -62,7 +61,6 @@ While users may implement their own, a number of sources are provided:
 - `HttpConfigSource` wraps a [reqwest](https://github.com/seanmonstar/reqwest) client and 
   fetches data over the network via HTTP(S). Requires `features = ["http"]`.
 - `S3ConfigSource` exposes an object in S3. Requires `features = ["s3"]`.
-- `GcsConfigSource` exposes an object in Google Cloud Storage. Requires `features = ["gcs"]`
 - `GitHubConfigSource` exposes a file on GitHub. Requires `features = ["github"]`.
 
 Suggestions for other sources are welcome. Ideally, backends will 
@@ -122,7 +120,7 @@ in production. Particular care should be given to `last_successful_check()`, as 
 stale the data might be. It's recommended to alert on this value if it exceeds tolerable 
 staleness.
 
-See [metrics.rs](./src/metrics.rs) for other metrics that can be collected.
+See [metrics.rs](shared/src/metrics.rs) for other metrics that can be collected.
 
 
 Demonstration
