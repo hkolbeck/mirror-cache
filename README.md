@@ -34,7 +34,7 @@ fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| { /* Parsing! */ });
 
-    FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder()
+    MirrorCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder()
         // These are required. Failing to specify any of these will cause type-checker errors.
         .with_source(source)
         .with_processor(processor)
