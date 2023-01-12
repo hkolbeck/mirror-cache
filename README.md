@@ -4,13 +4,13 @@ Full Dataset Cache
 Many datasets are small enough to keep the full collection in memory. For some like accept and
 deny lists, this is crucial as a traditional cache would need to save negative results as well.
 Others such as per-client overrides might be small enough to store in configs, but keeping them
-there necessitates a deploy when they change. Storing them in a database would again require 
+there necessitates a deploy when they change. Storing them in a database would again require
 caching negative results.
 
-Both cases result in caches often larger than the dataset backing them, while producing a 
-bimodal latency distribution as some calls require an external lookup. This library presents 
+Both cases result in caches often larger than the dataset backing them, while producing a
+bimodal latency distribution as some calls require an external lookup. This library presents
 a set or map like interface over a structure guaranteed to hold the full backing dataset in
-memory, with a background thread polling the backend for changes and atomically swapping them 
+memory, with a background thread polling the backend for changes and atomically swapping them
 in. Should the backing store become unavailable, operation can continue as normal, albeit with
 stale values.
 
@@ -22,19 +22,21 @@ Usage
 =====
 
 Cache instances are constructed using a builder, which is retrieved by calling
-`FullDatasetCache::<UpdatingMap<$Key, $Value>>::map_builder()` or 
-`FullDatasetCache::<UpdatingSet<$Value>>::set_builder()` depending on the desired collection
-type. Thanks to rust's type checker, your code won't compile if required fields are unset.
-See the appropriate section below for more details on each of the builder functions.
+`MirrorCache::<UpdatingMap<$Version, $Key, $Value>>::map_builder()`,
+`MirrorCache::<UpdatingSet<$Version, $Value>>::set_builder()`, or
+`MirrorCache::<UpdatingObject<$Version, $Value>>::object_builder()`
+depending on the desired collection type. Thanks to rust's type checker, your code 
+won't compile if required fields are unset. See the appropriate section below for 
+more details on each of the builder functions.
 
 ```rust
 // Note that this example is for the sync version of the library. An example of async usage can be 
 // found in [examples](examples)  
 fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
-    let processor = RawLineMapProcessor::new(|line| {/* Parsing! */});
-  
-    FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder() 
+    let processor = RawLineMapProcessor::new(|line| { /* Parsing! */ });
+
+    FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder()
         // These are required. Failing to specify any of these will cause type-checker errors.
         .with_source(source)
         .with_processor(processor)
@@ -52,20 +54,20 @@ fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
 }
 ```
 
-
 Sources
 =======
 
 While users may implement their own, a number of sources are provided:
-- `LocalFileConfigSource` wraps a file on the local file system, provided with core library.
-- `HttpConfigSource` wraps a [reqwest](https://github.com/seanmonstar/reqwest) client and 
+
+- `LocalFileConfigSource` exposes a file on the local file system, provided with core library.
+- `HttpConfigSource` wraps a [reqwest](https://github.com/seanmonstar/reqwest) client and
   fetches data over the network via HTTP(S). Requires `features = ["http"]`.
 - `S3ConfigSource` exposes an object in S3. Requires `features = ["s3"]`.
 - `GitHubConfigSource` exposes a file on GitHub. Requires `features = ["github"]`.
 
-Suggestions for other sources are welcome. Ideally, backends will 
-support some get-if-newer functionality. Those that don't can still be used, but 
-implementations will have to issue an unconditional fetch every time and care should be 
+Suggestions for other sources are welcome. Ideally, backends will
+support some get-if-newer functionality. Those that don't can still be used, but
+implementations will have to issue an unconditional fetch every time and care should be
 taken when choosing the fetch interval.
 
 
@@ -74,19 +76,20 @@ Processors
 
 Two processors are provided in the core library, both consume a Reader and pass lines to a
 specified parse function to be transformed into values or (key, value) tuples depending on
-whether a set or map is being constructed. The set values and map keys must be `Eq + Hash`, 
+whether a set or map is being constructed. The set values and map keys must be `Eq + Hash`,
 and they as well as the map values must be `Send + Sync`.
 
 When implementing your parse function, remember to allow blank lines and comments. It's also
-recommended to be forgiving about whitespace. It can return `Ok(None)` to indicate that 
+recommended to be forgiving about whitespace. It can return `Ok(None)` to indicate that
 nothing is wrong with the stream, the line in question just didn't translate to an entry in
-the collection. 
+the collection.
 
 
 Name
 ====
 
-Name is only passed to the thread scheduler for use as a thread label component.
+Name is only passed to the thread scheduler for use as a thread label component. Not present in
+async version.
 
 
 Callbacks
@@ -94,10 +97,10 @@ Callbacks
 
 Two callbacks may be specified, one to be invoked any time a new backing datasource state
 is swapped in, and one to be invoked any time a fetch or process fails. If nothing else,
-it's recommended to at least log the occurrence of any errors, but logging the fact that 
+it's recommended to at least log the occurrence of any errors, but logging the fact that
 the dataset has updated can help with debugging.
 
-The callback traits may be implemented directly, or `OnUpdate::with_fn()` and 
+The callback traits may be implemented directly, or `OnUpdate::with_fn()` and
 `OnFailure::with_fn()` convenience methods are provided, both will accept a closure or
 anything implementing the appropriate `Fn` type.
 
@@ -107,7 +110,7 @@ Fallback
 
 In order to make useful guarantees, the cache must complete an initial fetch when `build()`
 is invoked. By default, if that fetch fails, `build()` will return an error. If a fallback
-is provided, it will be used until a successful fetch can be completed. This can be 
+is provided, it will be used until a successful fetch can be completed. This can be
 important, as a backing data source going unavailable can cause new service instances to
 not come up if they just `unwrap()` after `build()`.
 
@@ -115,9 +118,9 @@ not come up if they just `unwrap()` after `build()`.
 Metrics
 =======
 
-It's optional to collect metrics, but it's strongly recommended to do so if running this code 
-in production. Particular care should be given to `last_successful_check()`, as it exposes how 
-stale the data might be. It's recommended to alert on this value if it exceeds tolerable 
+It's optional to collect metrics, but it's strongly recommended to do so if running this code
+in production. Particular care should be given to `last_successful_check()`, as it exposes how
+stale the data might be. It's recommended to alert on this value if it exceeds tolerable
 staleness.
 
 See [metrics.rs](shared/src/metrics.rs) for other metrics that can be collected.
@@ -126,9 +129,9 @@ See [metrics.rs](shared/src/metrics.rs) for other metrics that can be collected.
 Demonstration
 =============
 
-The following is a log of [the provided example](examples/local-example.rs), edited with comments. 
+The following is a log of [the provided example](examples/local-example.rs), edited with comments.
 The example sets up a cache backed by a local file of `key=value` pairs, where `value` is an
-i32, then loops forever printing the value of the key `C`. It's very noisy, as the example 
+i32, then loops forever printing the value of the key `C`. It's very noisy, as the example
 metrics implementation just calls `println!()`.
 
 ```

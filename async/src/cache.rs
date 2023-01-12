@@ -80,7 +80,8 @@ impl<O: 'static> MirrorCache<O> {
         };
 
         let collection = Arc::new(constructor(holder.clone()));
-        let forever = task::spawn(fetch_loop(holder, updater, interval, on_update, on_failure)
+        let forever = task::spawn(
+            fetch_loop(holder, updater, interval, on_update, on_failure)
         );
 
         Ok(MirrorCache {

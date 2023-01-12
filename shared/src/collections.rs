@@ -10,7 +10,7 @@ pub struct UpdatingObject<E, T> {
 }
 
 impl<E, T> UpdatingObject<E, T> {
-    pub(crate) fn new(backing: Holder<E, Arc<T>>) -> UpdatingObject<E, T> {
+    pub fn new(backing: Holder<E, Arc<T>>) -> UpdatingObject<E, T> {
         UpdatingObject {
             backing
         }
@@ -29,7 +29,7 @@ pub struct UpdatingSet<E, T: Eq + Hash + Send + Sync> {
 }
 
 impl<E, T: Eq + Hash + Send + Sync> UpdatingSet<E, T> {
-    pub(crate) fn new(backing: Holder<E, HashSet<T>>) -> UpdatingSet<E, T> {
+    pub fn new(backing: Holder<E, HashSet<T>>) -> UpdatingSet<E, T> {
         UpdatingSet {
             backing
         }
@@ -66,7 +66,7 @@ pub struct UpdatingMap<E, K: Eq + Hash, V> {
 }
 
 impl<E, K: Eq + Hash, V> UpdatingMap<E, K, V> {
-    pub(crate) fn new(backing: Holder<E, HashMap<K, Arc<V>>>) -> UpdatingMap<E, K, V> {
+    pub fn new(backing: Holder<E, HashMap<K, Arc<V>>>) -> UpdatingMap<E, K, V> {
         UpdatingMap {
             backing
         }

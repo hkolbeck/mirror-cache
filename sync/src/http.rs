@@ -1,5 +1,5 @@
 use reqwest::blocking::{Client, Response};
-use mirror_cache_shared::{Error, Result};
+use mirror_cache_shared::util::{Error, Result};
 use crate::sources::ConfigSource;
 
 pub struct HttpConfigSource {
@@ -45,7 +45,7 @@ impl ConfigSource<String, Response> for HttpConfigSource {
 
         if resp.status().is_success() {
             Ok(Some((HttpConfigSource::get_version(&resp), resp)))
-        } else if resp.status() == StatusCode::NOT_MODIFIED {
+        } else if resp.status() == 304 {
             Ok(None)
         } else {
             Err(Error::new(format!("Fetch failed. Status: {}", resp.status().as_str()).as_str()))

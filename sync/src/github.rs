@@ -4,7 +4,7 @@ use octocrab::Octocrab;
 use tokio::runtime::Runtime;
 use crate::sources::ConfigSource;
 
-use crate::util::{Error, Result};
+use mirror_cache_shared::util::{Error, Result};
 
 pub struct GitHubConfigSource {
     client: Octocrab,
@@ -23,7 +23,6 @@ impl GitHubConfigSource {
             repo: repo.into(),
             branch: branch.into(),
             path: path.into(),
-            #[cfg(not(feature = "async-cache"))]
             rt: tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?,
@@ -32,7 +31,6 @@ impl GitHubConfigSource {
 
 }
 
-#[cfg(not(feature = "async-cache"))]
 impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {
     fn fetch(&self) -> Result<(Option<String>, Cursor<Vec<u8>>)> {
         let handler = self.client.repos(self.owner.clone(), self.repo.clone());
