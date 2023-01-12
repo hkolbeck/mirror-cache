@@ -19,16 +19,16 @@ impl Display for Error {
 }
 
 impl Error {
-    pub fn new<S: Into<String>>(msg: S) -> Error {
+    pub fn new(msg: &str) -> Error {
         Error {
-            msg: msg.into()
+            msg: String::from(msg)
         }
     }
 }
 
 impl<E: std::error::Error> From<E> for Error {
     fn from(e: E) -> Self {
-        Error::new(e.to_string())
+        Error::new(e.to_string().as_str())
     }
 }
 
@@ -106,7 +106,7 @@ impl<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> OnFailure<E, F> {
     }
 }
 
-pub(crate) type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
+pub type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
 
 pub struct Absent {}
 

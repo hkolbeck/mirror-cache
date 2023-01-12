@@ -1,4 +1,5 @@
-/target
+./*/target
+target/
 .idea/
 Cargo.lock
 full-dataset-cache.iml

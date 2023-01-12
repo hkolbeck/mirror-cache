@@ -22,20 +22,22 @@ Usage
 =====
 
 Cache instances are constructed using a builder, which is retrieved by calling
-`FullDatasetCache::<UpdatingMap<$Key, $Value>>::map_builder()` or
-`FullDatasetCache::<UpdatingSet<$Value>>::set_builder()` depending on the desired collection
-type. Thanks to rust's type checker, your code won't compile if required fields are unset.
-See the appropriate section below for more details on each of the builder functions.
+`MirrorCache::<UpdatingMap<$Version, $Key, $Value>>::map_builder()`,
+`MirrorCache::<UpdatingSet<$Version, $Value>>::set_builder()`, or
+`MirrorCache::<UpdatingObject<$Version, $Value>>::object_builder()`
+depending on the desired collection type. Thanks to rust's type checker, your code 
+won't compile if required fields are unset. See the appropriate section below for 
+more details on each of the builder functions.
 
 ```rust
 // Note that this example is for the sync version of the library. An example of async usage can be 
-// found in [examples]()  
+// found in [examples](examples)  
 fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| { /* Parsing! */ });
 
     FullDatasetCache::<UpdatingMap<VersionType, KeyType, ValueType>>::map_builder()
-        // These are required. Failing to specify any of these will cause typechecker errors.
+        // These are required. Failing to specify any of these will cause type-checker errors.
         .with_source(source)
         .with_processor(processor)
         .with_fetch_interval(Duration::from_secs(10))
@@ -47,7 +49,6 @@ fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
 
-
     // Collection instances are safe to hold on to, borrow, clone, or pass ownership of.
     let map = cache.get_collection();
 }
@@ -58,11 +59,10 @@ Sources
 
 While users may implement their own, a number of sources are provided:
 
-- `LocalFileConfigSource` wraps a file on the local file system, provided with core library.
+- `LocalFileConfigSource` exposes a file on the local file system, provided with core library.
 - `HttpConfigSource` wraps a [reqwest](https://github.com/seanmonstar/reqwest) client and
   fetches data over the network via HTTP(S). Requires `features = ["http"]`.
 - `S3ConfigSource` exposes an object in S3. Requires `features = ["s3"]`.
-- `GcsConfigSource` exposes an object in Google Cloud Storage. Requires `features = ["gcs"]`
 - `GitHubConfigSource` exposes a file on GitHub. Requires `features = ["github"]`.
 
 Suggestions for other sources are welcome. Ideally, backends will
@@ -88,7 +88,8 @@ the collection.
 Name
 ====
 
-Name is only passed to the thread scheduler for use as a thread label component.
+Name is only passed to the thread scheduler for use as a thread label component. Not present in
+async version.
 
 
 Callbacks
@@ -122,16 +123,16 @@ in production. Particular care should be given to `last_successful_check()`, as 
 stale the data might be. It's recommended to alert on this value if it exceeds tolerable
 staleness.
 
-See [metrics.rs](./src/metrics.rs) for other metrics that can be collected.
+See [metrics.rs](shared/src/metrics.rs) for other metrics that can be collected.
 
 
 Demonstration
 =============
 
-The following is a log of [the provided local file example](examples/local-example.rs), edited
-with comments. The example sets up a cache backed by a local file of `key=value` pairs, where
-`value` is an i32, then loops forever printing the value of the key `C`. It's very noisy, as
-the example metrics implementation just calls `println!()`.
+The following is a log of [the provided example](examples/local-example.rs), edited with comments.
+The example sets up a cache backed by a local file of `key=value` pairs, where `value` is an
+i32, then loops forever printing the value of the key `C`. It's very noisy, as the example
+metrics implementation just calls `println!()`.
 
 ```
 Fallback invoked! #Initial fetch failed, fallback value of an empty map used

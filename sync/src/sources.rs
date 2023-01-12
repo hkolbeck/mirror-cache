@@ -2,7 +2,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
-use crate::util::Result;
+use mirror_cache_shared::util::Result;
+
 
 pub trait ConfigSource<E, S> {
     fn fetch(&self) -> Result<(Option<E>, S)>;

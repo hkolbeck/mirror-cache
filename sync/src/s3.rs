@@ -1,8 +1,8 @@
 use aws_sdk_s3::Client;
 use aws_sdk_s3::types::{ByteStream, DateTime, SdkError};
-use reqwest::StatusCode;
+use aws_smithy_http::result::ServiceError;
 use tokio::runtime::Runtime;
-use crate::cache::Result;
+use mirror_cache_shared::util::Result;
 use crate::sources::ConfigSource;
 
 pub struct S3ConfigSource {
@@ -44,11 +44,11 @@ impl ConfigSource<DateTime, ByteStream> for S3ConfigSource {
 
         match result {
             Ok(resp) => Ok(Some((resp.last_modified().cloned(), resp.body))),
-            Err(SdkError::ServiceError{err, raw}) => {
-                if raw.http().status() == StatusCode::NOT_MODIFIED {
+            Err(SdkError::ServiceError(ServiceError{source, raw})) => {
+                if raw.http().status() == 304 {
                     Ok(None)
                 } else {
-                    Err(err.into())
+                    Err(source.into())
                 }
             },
             Err(err) => Err(err.into())

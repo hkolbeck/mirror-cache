@@ -1,0 +1,24 @@
+[package]
+name = "mirror-cache-async"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mirror-cache-shared = { version = "0.1.0", path = "../shared"}
+
+scheduled-thread-pool = "0.2.6"
+chrono = "0.4.22"
+parking_lot = "0.12.1"
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread", "time"] }
+async-trait = "0.1.58"
+
+reqwest = {version = "0.11.12", optional = true}
+aws-sdk-s3 = { version = "0.22.0", optional = true}
+aws-smithy-http = { version = "0.53.0", optional = true }
+octocrab = { version = "0.18.1", optional = true }
+
+[features]
+default = []
+http = ["reqwest"]
+s3 = ["aws-sdk-s3", "aws-smithy-http"]
+github = ["octocrab"]
