@@ -30,8 +30,6 @@ won't compile if required fields are unset. See the appropriate section below fo
 more details on each of the builder functions.
 
 ```rust
-// Note that this example is for the sync version of the library. An example of async usage can be 
-// found in [examples](examples)  
 fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| { /* Parsing! */ });
