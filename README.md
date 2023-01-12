@@ -1,5 +1,5 @@
-Full Dataset Cache
-==================
+Mirror Cache
+============
 
 Many datasets are small enough to keep the full collection in memory. For some like accept and
 deny lists, this is crucial as a traditional cache would need to save negative results as well.
@@ -30,8 +30,6 @@ won't compile if required fields are unset. See the appropriate section below fo
 more details on each of the builder functions.
 
 ```rust
-// Note that this example is for the sync version of the library. An example of async usage can be 
-// found in [examples](examples)  
 fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
     let source = LocalFileConfigSource::new("my.config");
     let processor = RawLineMapProcessor::new(|line| { /* Parsing! */ });

@@ -1,5 +1,5 @@
 fn main() {
-    let source = LocalFileConfigSource::new("./src/bin/my.config");
+    let source = LocalFileConfigSource::new("./my.config");
     let processor = RawLineMapProcessor::new(parse_line);
 
     let cache = MirrorCache::<UpdatingMap<u128, String, i32>>::map_builder()
