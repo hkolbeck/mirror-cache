@@ -14,4 +14,3 @@ pub mod s3;
 
 #[cfg(feature = "github")]
 pub mod github;
-

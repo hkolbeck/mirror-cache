@@ -63,7 +63,8 @@ While users may implement their own, a number of sources are provided:
 - `S3ConfigSource` exposes an object in S3. Requires `features = ["s3"]`.
 - `GitHubConfigSource` exposes a file on GitHub. Requires `features = ["github"]`.
 
-Suggestions for other sources are welcome. Ideally, backends will
+Suggestions for other sources are welcome. Google Cloud Storage is not included due to a 
+dependency conflict with the Github client used. Ideally, backends will
 support some get-if-newer functionality. Those that don't can still be used, but
 implementations will have to issue an unconditional fetch every time and care should be
 taken when choosing the fetch interval.
