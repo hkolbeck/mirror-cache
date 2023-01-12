@@ -9,10 +9,10 @@ caching negative results.
 
 Both cases result in caches often larger than the dataset backing them, while producing a
 bimodal latency distribution as some calls require an external lookup. This library presents
-a set or map like interface over a structure guaranteed to hold the full backing dataset in
-memory, with a background thread polling the backend for changes and atomically swapping them
-in. Should the backing store become unavailable, operation can continue as normal, albeit with
-stale values.
+a set, map, or user-defined interface over a structure guaranteed to hold the full backing
+dataset in memory, with a background thread polling the backend for changes and atomically
+swapping them in. Should the backing store become unavailable, operation can continue as
+normal, albeit with stale values.
 
 This library is best suited to problems where the underlying data changes infrequently and
 there is a tolerance for slightly stale values, similar to any caching use-case.
