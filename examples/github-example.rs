@@ -5,15 +5,15 @@ fn main() {
 
     let source = GitHubConfigSource::new(
         octocrab,
-        "hkolbeck",
-        "config-example",
-        "main",
-        "my.config",
+        "repo-owner",
+        "repo-name",
+        "branch",
+        "file-path",
     ).unwrap();
 
     let processor = RawLineMapProcessor::new(parse_line);
 
-    let cache = FullDatasetCache::<UpdatingMap<String, String, i32>>::map_builder()
+    let cache = MirrorCache::<UpdatingMap<String, String, i32>>::map_builder()
         // These are required.
         .with_source(source)
         .with_processor(processor)

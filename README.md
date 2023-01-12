@@ -46,9 +46,6 @@ fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
         .with_failure_callback(OnFailure::with_fn(|e, _| println!("Failed with error: {}", e)))
         .with_metrics(ExampleMetrics::new())
         .build().unwrap();
-
-    // Collection instances are safe to hold on to, borrow, clone, or pass ownership of.
-    let map = cache.get_collection();
 }
 ```
 
@@ -64,7 +61,7 @@ While users may implement their own, a number of sources are provided:
 - `GitHubConfigSource` exposes a file on GitHub. Requires `features = ["github"]`.
 
 Suggestions for other sources are welcome. Google Cloud Storage is not included due to a 
-dependency conflict with the Github client used. Ideally, backends will
+dependency conflict with the GitHub client used. Ideally, backends will
 support some get-if-newer functionality. Those that don't can still be used, but
 implementations will have to issue an unconditional fetch every time and care should be
 taken when choosing the fetch interval.
