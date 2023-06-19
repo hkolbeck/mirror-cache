@@ -13,7 +13,8 @@ use std::time::Duration;
  * lost or an invalid config is pushed, the last good value is used for arbitrarily long with support
  * for alerting that issues have arisen.
  */
-struct Config { // Must be Sync + Send
+struct Config {
+    // Must be Sync + Send
     pub read_max_bytes: usize,
     pub sleep_duration: Duration,
 }
@@ -57,8 +58,6 @@ fn make_cache(shared_service: &'static mut RwLock<Arc<MyService>>)
         "file-path",
     ).unwrap();
 
-    let processor = RawLineMapProcessor::new(parse_line);
-
     let cache = MirrorCache::<Config>::object_builder()
         .with_source(source)
         .with_processor(GHConfigParser)
@@ -96,10 +95,7 @@ fn make_cache(shared_service: &'static mut RwLock<Arc<MyService>>)
                 }
             }
         }))
-        .build().unwrap();
-
-    let config = cache.get_collection();
-    loop {}
+        .build().unwrap()
 }
 
 struct GHConfigParser;
