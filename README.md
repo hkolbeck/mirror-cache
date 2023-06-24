@@ -1,8 +1,7 @@
 Mirror Cache
 ============
 
-### Status: In Progress. Everything described below is implemented targetting both sync and async 
-### usage, currently resolving issues with annotations around the sync/async split
+### Status: In Progress. Everything described below is implemented targetting both sync and async usage, currently resolving issues with annotations around the sync/async split
 
 Many datasets are small enough to keep the full collection in memory. For some like accept and
 deny lists, this is crucial as a traditional cache would need to save negative results as well.
