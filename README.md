@@ -34,6 +34,7 @@ Cache instances are constructed using a builder, which is retrieved by calling o
 * `MirrorCache::<UpdatingMap<$Version, $Key, $Value>>::map_builder()`,
 * `MirrorCache::<UpdatingSet<$Version, $Value>>::set_builder()`, or
 * `MirrorCache::<UpdatingObject<$Version, $Value>>::object_builder()`
+  
 Depending on the desired collection type. Code won't compile if required fields are unset.
 See the appropriate section below for more details on each of the builder functions.
 
