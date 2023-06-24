@@ -30,13 +30,12 @@ there is a tolerance for slightly stale values, similar to any caching use-case.
 Usage
 =====
 
-Cache instances are constructed using a builder, which is retrieved by calling
-`MirrorCache::<UpdatingMap<$Version, $Key, $Value>>::map_builder()`,
-`MirrorCache::<UpdatingSet<$Version, $Value>>::set_builder()`, or
-`MirrorCache::<UpdatingObject<$Version, $Value>>::object_builder()`
-depending on the desired collection type. Thanks to rust's type checker, your code 
-won't compile if required fields are unset. See the appropriate section below for 
-more details on each of the builder functions.
+Cache instances are constructed using a builder, which is retrieved by calling one of
+* `MirrorCache::<UpdatingMap<$Version, $Key, $Value>>::map_builder()`,
+* `MirrorCache::<UpdatingSet<$Version, $Value>>::set_builder()`, or
+* `MirrorCache::<UpdatingObject<$Version, $Value>>::object_builder()`
+Depending on the desired collection type. Code won't compile if required fields are unset.
+See the appropriate section below for more details on each of the builder functions.
 
 ```rust
 fn main() -> FullDatasetCache<UpdatingMap<K, V>> {
