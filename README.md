@@ -19,11 +19,11 @@ normal, albeit with stale values.
 This library is best suited to problems where the underlying data changes infrequently and
 there is a tolerance for slightly stale values, similar to any caching use-case.
 
+```
 //TODO: Arbitrary https client support
-
 //TODO: A separate project: A proxy server that allows only a few instances to maintain data 
-
 //TODO: direct from the source and serves the stored data out for usage by service instances 
+```
 
 Usage
 =====
