@@ -24,7 +24,7 @@ there is a tolerance for slightly stale values, similar to any caching use-case.
 //TODO: - A separate project: A proxy server that allows only a few instances to maintain data 
 //TODO:   direct from the source and serves the stored data out for usage by service instances
 //TODO: - Make as many configuration values as possible live-configurable, to enable wrapping
-//TODO    one in another, updating configs of the primary caching service live.
+//TODO:    one in another, updating configs of the primary caching service live.
 ```
 
 Usage
