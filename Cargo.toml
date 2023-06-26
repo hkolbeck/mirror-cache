@@ -1,0 +1,25 @@
+[package]
+name = "mirror-cache"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.mirror-cache-core]
+path = "libs/core"
+
+[dependencies.mirror-cache-async]
+path = "libs/async"
+optional = true
+
+[dependencies.mirror-cache-sync]
+path = "libs/sync"
+optional = true
+
+[features]
+default = []
+sync = ["dep:mirror-cache-sync"]
+async = ["dep:mirror-cache-async"]
+
+# Config source features
+github = ["mirror-cache-sync?/github", "mirror-cache-async?/github"]
+http = ["mirror-cache-sync?/http", "mirror-cache-async?/http"]
+s3 = ["mirror-cache-sync?/s3", "mirror-cache-async?/s3"]

@@ -1,0 +1,8 @@
+[package]
+name = "example-gh-config"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+mirror-cache = { path = "../..", features = ["sync", "github"]}

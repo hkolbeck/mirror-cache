@@ -1,7 +1,7 @@
 Mirror Cache
 ============
 
-### Status: In Progress. Everything described below is implemented targetting both sync and async usage, currently resolving issues with annotations around the sync/async split
+### Status: In Progress. Everything described below is implemented targeting both sync and async usage, currently resolving issues with annotations around the sync/async split
 
 Many datasets are small enough to keep the full collection in memory. For some like accept and
 deny lists, this is crucial as a traditional cache would need to save negative results as well.
@@ -128,13 +128,13 @@ in production. Particular care should be given to `last_successful_check()`, as 
 stale the data might be. It's recommended to alert on this value if it exceeds tolerable
 staleness.
 
-See [metrics.rs](shared/src/metrics.rs) for other metrics that can be collected.
+See [metrics.rs](libs/core/src/metrics.rs) for other metrics that can be collected.
 
 
 Demonstration
 =============
 
-The following is a log of [the provided example](examples/local-example.rs), edited with comments.
+The following is a log of [the provided example](examples/local-file-config-source/src/main), edited with comments.
 The example sets up a cache backed by a local file of `key=value` pairs, where `value` is an
 i32, then loops forever printing the value of the key `C`. It's very noisy, as the example
 metrics implementation just calls `println!()`.
