@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use reqwest::{Client, Response};
 use reqwest::StatusCode;
-use crate::cache::{Error, Result};
-use crate::sources::ConfigSource;
+use mirror_cache_core::util::{Error, Result};
+use crate::sources::sources::ConfigSource;
 
 pub struct HttpConfigSource {
     client: Client,

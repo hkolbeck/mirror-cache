@@ -8,11 +8,11 @@ use chrono::DateTime;
 use parking_lot::RwLock;
 use tokio::{task, time};
 use tokio::task::JoinHandle;
-use mirror_cache_shared::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
-use mirror_cache_shared::metrics::Metrics;
-use mirror_cache_shared::processors::RawConfigProcessor;
-use mirror_cache_shared::util::{FailureFn, FallbackFn, Holder, UpdateFn, Result, Error, Absent};
-use crate::sources::ConfigSource;
+use mirror_cache_core::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
+use mirror_cache_core::metrics::Metrics;
+use mirror_cache_core::processors::RawConfigProcessor;
+use mirror_cache_core::util::{FailureFn, FallbackFn, Holder, UpdateFn, Result, Error, Absent};
+use crate::sources::sources::ConfigSource;
 
 pub struct MirrorCache<O> {
     collection: Arc<O>,

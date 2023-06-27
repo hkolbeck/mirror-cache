@@ -1,9 +1,9 @@
 use aws_sdk_s3::Client;
-use aws_sdk_s3::types::{ByteStream, DateTime, SdkError};
-use aws_smithy_http::result::ServiceError;
+use aws_sdk_s3::primitives::{ByteStream, DateTime};
+use aws_smithy_http::result::{ServiceError, SdkError};
 use tokio::runtime::Runtime;
-use mirror_cache_shared::util::Result;
-use crate::sources::ConfigSource;
+use mirror_cache_core::util::Result;
+use crate::sources::sources::ConfigSource;
 
 pub struct S3ConfigSource {
     client: Client,

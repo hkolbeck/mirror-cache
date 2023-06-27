@@ -1,10 +1,11 @@
 use std::io::Cursor;
 use octocrab::Octocrab;
+use async_trait::async_trait;
 
-use tokio::runtime::Runtime;
-use crate::sources::ConfigSource;
+use mirror_cache_core::util::{Error, Result};
 
-use crate::util::{Error, Result};
+use crate::sources::sources::ConfigSource;
+
 
 pub struct GitHubConfigSource {
     client: Octocrab,
@@ -26,7 +27,6 @@ impl GitHubConfigSource {
     }
 
 }
-
 
 #[async_trait]
 impl ConfigSource<String, Cursor<Vec<u8>>> for GitHubConfigSource {

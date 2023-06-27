@@ -4,14 +4,16 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
+
 use chrono::DateTime;
+use mirror_cache_core::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
+use mirror_cache_core::metrics::Metrics;
+use mirror_cache_core::processors::RawConfigProcessor;
+use mirror_cache_core::util::{Absent, Error, FailureFn, FallbackFn, Holder, Result, UpdateFn};
 use parking_lot::RwLock;
 use scheduled_thread_pool::ScheduledThreadPool;
-use mirror_cache_shared::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
-use mirror_cache_shared::metrics::Metrics;
-use mirror_cache_shared::processors::RawConfigProcessor;
-use mirror_cache_shared::util::{Holder, Result, Error, UpdateFn, FailureFn, FallbackFn, Absent};
-use crate::sources::ConfigSource;
+
+use crate::sources::sources::ConfigSource;
 
 pub struct MirrorCache<O> {
     cache: Arc<O>,
@@ -51,10 +53,10 @@ impl<O: 'static> MirrorCache<O> {
                         if let Some(m) = metrics.as_mut() {
                             m.fallback_invoked();
                         }
-                    },
+                    }
                     None => return Err(Error::new(format!("Couldn't complete initial fetch: {}", e).as_str())),
                 }
-            },
+            }
             Ok(init) => {
                 match init.as_ref() {
                     None => {
@@ -65,7 +67,7 @@ impl<O: 'static> MirrorCache<O> {
                                 if let Some(m) = metrics.as_mut() {
                                     m.fallback_invoked();
                                 }
-                            },
+                            }
                             None => return Err(Error::new("Initial fetch should be unconditional but failed and no fallback specified")),
                         }
                     }
@@ -75,13 +77,16 @@ impl<O: 'static> MirrorCache<O> {
                         }
                     }
                 }
-            },
+            }
         };
 
         let mut last_success = DateTime::from(SystemTime::now());
         let cache = Arc::new(constructor(holder.clone()));
         let scheduler = match name {
-            Some(n) => ScheduledThreadPool::with_name(n.as_str(), 1),
+            Some(n) => ScheduledThreadPool::builder()
+                .num_threads(1)
+                .thread_name_pattern(n.as_str())
+                .build(),
             None => ScheduledThreadPool::new(1),
         };
 
@@ -217,7 +222,7 @@ impl<O: 'static> MirrorCache<O> {
         C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, Arc<V>> + Send + Sync + 'static,
         D: Into<Duration>
-    >() -> Builder<UpdatingObject<E, V>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent>{
+    >() -> Builder<UpdatingObject<E, V>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent> {
         builder(UpdatingObject::new)
     }
 }
@@ -230,10 +235,10 @@ pub struct Builder<
     C,
     P,
     D,
-    U=Absent,
-    F=Absent,
-    A=Absent,
-    M=Absent,
+    U = Absent,
+    F = Absent,
+    A = Absent,
+    M = Absent,
 > {
     constructor: fn(Holder<E, T>) -> O,
     name: Option<String>,
@@ -291,7 +296,7 @@ impl<
             update_callback: Some(callback),
             fallback: self.fallback,
             metrics: self.metrics,
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -306,7 +311,7 @@ impl<
             update_callback: self.update_callback,
             fallback: self.fallback,
             metrics: self.metrics,
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -321,7 +326,7 @@ impl<
             update_callback: self.update_callback,
             fallback: self.fallback,
             metrics: Some(metrics),
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -336,7 +341,7 @@ impl<
             update_callback: self.update_callback,
             fallback: Some(fallback),
             metrics: self.metrics,
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -386,6 +391,6 @@ fn builder<
         update_callback: None,
         fallback: None,
         metrics: None,
-        phantom: PhantomData::default()
+        phantom: PhantomData::default(),
     }
 }

@@ -2,9 +2,9 @@ use std::io::Cursor;
 use octocrab::Octocrab;
 
 use tokio::runtime::Runtime;
-use crate::sources::ConfigSource;
+use crate::sources::sources::ConfigSource;
 
-use mirror_cache_shared::util::{Error, Result};
+use mirror_cache_core::util::{Error, Result};
 
 pub struct GitHubConfigSource {
     client: Octocrab,

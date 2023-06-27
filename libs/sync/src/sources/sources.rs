@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
-use mirror_cache_shared::util::Result;
+use mirror_cache_core::util::Result;
 
 
 pub trait ConfigSource<E, S> {
