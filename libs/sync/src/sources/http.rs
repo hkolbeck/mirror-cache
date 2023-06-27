@@ -1,5 +1,7 @@
-use reqwest::blocking::{Client, Response};
+pub use reqwest::blocking::{Client, Response};
+
 use mirror_cache_core::util::{Error, Result};
+
 use crate::sources::sources::ConfigSource;
 
 pub struct HttpConfigSource {

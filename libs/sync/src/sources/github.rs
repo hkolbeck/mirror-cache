@@ -1,5 +1,6 @@
+pub use octocrab::Octocrab;
+
 use std::io::Cursor;
-use octocrab::Octocrab;
 
 use tokio::runtime::Runtime;
 use crate::sources::sources::ConfigSource;

@@ -1,5 +1,6 @@
+pub use aws_sdk_s3::Client;
+
 use async_trait::async_trait;
-use aws_sdk_s3::Client;
 use aws_sdk_s3::types::{ByteStream, DateTime, SdkError};
 use aws_smithy_http::result::ServiceError;
 use reqwest::StatusCode;

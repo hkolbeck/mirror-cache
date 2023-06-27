@@ -1,4 +1,5 @@
-use aws_sdk_s3::Client;
+pub use aws_sdk_s3::Client;
+
 use aws_sdk_s3::primitives::{ByteStream, DateTime};
 use aws_smithy_http::result::{ServiceError, SdkError};
 use tokio::runtime::Runtime;

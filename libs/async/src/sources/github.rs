@@ -1,5 +1,6 @@
+pub use octocrab::Octocrab;
+
 use std::io::Cursor;
-use octocrab::Octocrab;
 use async_trait::async_trait;
 
 use mirror_cache_core::util::{Error, Result};
