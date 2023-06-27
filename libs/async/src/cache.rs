@@ -4,14 +4,16 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
+
+use arc_swap::ArcSwap;
 use chrono::DateTime;
-use parking_lot::RwLock;
-use tokio::{task, time};
-use tokio::task::JoinHandle;
 use mirror_cache_core::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
 use mirror_cache_core::metrics::Metrics;
 use mirror_cache_core::processors::RawConfigProcessor;
-use mirror_cache_core::util::{FailureFn, FallbackFn, Holder, UpdateFn, Result, Error, Absent};
+use mirror_cache_core::util::{Absent, Error, FailureFn, FallbackFn, Holder, Result, UpdateFn};
+use tokio::{task, time};
+use tokio::task::JoinHandle;
+
 use crate::sources::sources::ConfigSource;
 
 pub struct MirrorCache<O> {
@@ -34,11 +36,16 @@ impl<O: 'static> MirrorCache<O> {
         A: FallbackFn<T> + 'static,
         M: Metrics<E> + Send + Sync + 'static
     >(
-        source: C, processor: P, interval: Duration,
-        on_update: Option<U>, on_failure: Option<F>, maybe_metrics: Option<M>,
-        fallback: Option<A>, constructor: fn(Holder<E, T>) -> O,
+        source: C,
+        processor: P,
+        interval: Duration,
+        on_update: Option<U>,
+        on_failure: Option<F>,
+        maybe_metrics: Option<M>,
+        fallback: Option<A>,
+        constructor: fn(Holder<E, T>) -> O,
     ) -> Result<MirrorCache<O>> {
-        let holder: Holder<E, T> = Arc::new(RwLock::new(Arc::new(None)));
+        let holder: Holder<E, T> = Arc::new(ArcSwap::new(Arc::new(None)));
         let metrics = maybe_metrics.map(Arc::new);
         let updater =
             Arc::new(Updater::new(holder.clone(), source, processor, metrics.clone()));
@@ -47,8 +54,9 @@ impl<O: 'static> MirrorCache<O> {
             Err(e) => {
                 match fallback {
                     Some(fallback_fun) => {
-                        let mut guard = holder.write();
-                        *guard = Arc::new(Some((None, fallback_fun.get_fallback())));
+                        let fallback_state =
+                            Arc::new(Some((None, fallback_fun.get_fallback())));
+                        holder.as_ref().store(fallback_state);
                         if let Some(m) = metrics {
                             m.fallback_invoked();
                         }
@@ -61,8 +69,8 @@ impl<O: 'static> MirrorCache<O> {
                     None => {
                         match fallback {
                             Some(fallback_fun) => {
-                                let mut guard = holder.write();
-                                *guard = Arc::new(Some((None, fallback_fun.get_fallback())));
+                                let fallback_state = Arc::new(Some((None, fallback_fun.get_fallback())));
+                                holder.as_ref().store(fallback_state);
                                 if let Some(m) = metrics {
                                     m.fallback_invoked();
                                 }
@@ -124,7 +132,7 @@ impl<O: 'static> MirrorCache<O> {
         C: ConfigSource<E, S> + Send + Sync + 'static,
         P: RawConfigProcessor<S, Arc<V>> + Send + Sync + 'static,
         D: Into<Duration>
-    >() -> Builder<UpdatingObject<E, V>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent>{
+    >() -> Builder<UpdatingObject<E, V>, Arc<V>, S, E, C, P, D, Absent, Absent, Absent, Absent> {
         builder(UpdatingObject::new)
     }
 }
@@ -150,7 +158,7 @@ async fn fetch_loop<
 
     loop {
         let previous = {
-            holder.read().clone()
+            holder.load_full().clone()
         };
 
         match updater.as_ref().update().await {
@@ -195,7 +203,7 @@ impl<
     M: Metrics<E> + Send + Sync + 'static,
 > Updater<S, T, E, C, P, M> {
     pub(crate) fn new(
-        holder: Holder<E, T>, source: C, processor: P, metrics: Option<Arc<M>>
+        holder: Holder<E, T>, source: C, processor: P, metrics: Option<Arc<M>>,
     ) -> Updater<S, T, E, C, P, M> {
         Updater {
             holder,
@@ -208,10 +216,8 @@ impl<
 
     pub(crate) async fn update(&self) -> Result<Arc<Option<(Option<E>, T)>>> {
         let metrics = self.metrics.clone();
-        let version = {
-            let guard = self.holder.read();
-            guard.as_ref().as_ref().map(|(v, _)| v.clone())
-        };
+        let version =
+            self.holder.load_full().as_ref().as_ref().map(|(v, _)| v.clone());
 
         let fetch_start = Instant::now();
         let raw_update = match version {
@@ -235,11 +241,8 @@ impl<
 
         match update {
             Some((v, Ok(new_coll))) => {
-                let ret = {
-                    let mut write_lock = self.holder.write();
-                    *write_lock = Arc::new(Some((v.clone(), new_coll)));
-                    Ok(write_lock.clone())
-                };
+                let ret = Arc::new(Some((v.clone(), new_coll)));
+                self.holder.as_ref().store(ret.clone());
 
                 if let Some(m) = metrics {
                     let now = SystemTime::now();
@@ -248,7 +251,7 @@ impl<
                     m.update(&v, fetch_time, process_time);
                 };
 
-                ret
+                Ok(ret)
             }
             Some((_, Err(e))) => {
                 if let Some(m) = metrics {
@@ -276,10 +279,10 @@ pub struct Builder<
     C,
     P,
     D,
-    U=Absent,
-    F=Absent,
-    A=Absent,
-    M=Absent,
+    U = Absent,
+    F = Absent,
+    A = Absent,
+    M = Absent,
 > {
     constructor: fn(Holder<E, T>) -> O,
     fetch_interval: Option<D>,
@@ -330,7 +333,7 @@ impl<
             update_callback: Some(callback),
             fallback: self.fallback,
             metrics: self.metrics,
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -344,7 +347,7 @@ impl<
             update_callback: self.update_callback,
             fallback: self.fallback,
             metrics: self.metrics,
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -358,7 +361,7 @@ impl<
             update_callback: self.update_callback,
             fallback: self.fallback,
             metrics: Some(metrics),
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -372,7 +375,7 @@ impl<
             update_callback: self.update_callback,
             fallback: Some(fallback),
             metrics: self.metrics,
-            phantom: PhantomData::default()
+            phantom: PhantomData::default(),
         }
     }
 
@@ -420,6 +423,6 @@ fn builder<
         update_callback: None,
         fallback: None,
         metrics: None,
-        phantom: PhantomData::default()
+        phantom: PhantomData::default(),
     }
 }

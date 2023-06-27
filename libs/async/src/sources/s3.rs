@@ -3,7 +3,6 @@ pub use aws_sdk_s3::Client;
 use async_trait::async_trait;
 use aws_sdk_s3::primitives::{ByteStream, DateTime};
 use aws_smithy_http::result::SdkError;
-use reqwest::StatusCode;
 use mirror_cache_core::util::Result;
 use crate::sources::sources::ConfigSource;
 
@@ -44,7 +43,7 @@ impl ConfigSource<DateTime, ByteStream> for S3ConfigSource {
         match result {
             Ok(resp) => Ok(Some((resp.last_modified().cloned(), resp.body))),
             Err(SdkError::ServiceError(err)) => {
-                if err.raw().http().status() == StatusCode::NOT_MODIFIED {
+                if err.raw().http().status() == 304 {
                     Ok(None)
                 } else {
                     Err(err.err().into())

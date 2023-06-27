@@ -8,10 +8,10 @@ mirror-cache-core = { path = "../core" }
 
 scheduled-thread-pool = "^0.2.7"
 chrono = "^0.4.26"
-parking_lot = "^0.12.1"
 tokio = { version = "^1.28.2", features = ["macros", "rt-multi-thread", "time"] }
 async-trait = "^0.1.68"
 url = "^2.3.0"
+arc-swap = "^1.6.0"
 
 octocrab = { version = "^0.19.0", optional = true }
 reqwest = {version = "^0.11.18", optional = true}

@@ -4,7 +4,7 @@ use std::result;
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
-use parking_lot::RwLock;
+use arc_swap::ArcSwap;
 use crate::metrics::Metrics;
 
 #[derive(Debug)]
@@ -106,7 +106,7 @@ impl<E, F: Fn(&Error, Option<(Option<E>, DateTime<Utc>)>)> OnFailure<E, F> {
     }
 }
 
-pub type Holder<E, T> = Arc<RwLock<Arc<Option<(Option<E>, T)>>>>;
+pub type Holder<E, T> = Arc<ArcSwap<Option<(Option<E>, T)>>>;
 
 pub struct Absent {}
 

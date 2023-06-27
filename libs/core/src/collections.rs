@@ -17,7 +17,7 @@ impl<E, T> UpdatingObject<E, T> {
     }
 
     pub fn get_current(&self) -> Arc<T> {
-        match self.backing.read().as_ref() {
+        match self.backing.load_full().as_ref() {
             None => panic!("{}", NON_RUNNING),
             Some((_, a)) => a.clone()
         }
@@ -57,7 +57,7 @@ impl<E, T: Eq + Hash + Send + Sync> UpdatingSet<E, T> {
     }
 
     fn get_collection(&self) -> Arc<Option<(Option<E>, HashSet<T>)>> {
-        self.backing.read().clone()
+        self.backing.load_full().clone()
     }
 }
 
@@ -97,6 +97,6 @@ impl<E, K: Eq + Hash + Send + Sync, V: Send + Sync> UpdatingMap<E, K, V> {
 
     #[allow(clippy::type_complexity)]
     fn get_collection(&self) -> Arc<Option<(Option<E>, HashMap<K, Arc<V>>)>> {
-        self.backing.read().clone()
+        self.backing.load_full().clone()
     }
 }

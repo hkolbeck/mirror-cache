@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 chrono = "^0.4.26"
-parking_lot = "^0.12.1"
+arc-swap = "1.6.0"

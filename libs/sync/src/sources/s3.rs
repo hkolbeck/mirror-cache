@@ -1,7 +1,7 @@
 pub use aws_sdk_s3::Client;
 
 use aws_sdk_s3::primitives::{ByteStream, DateTime};
-use aws_smithy_http::result::{ServiceError, SdkError};
+use aws_smithy_http::result::SdkError;
 use tokio::runtime::Runtime;
 use mirror_cache_core::util::Result;
 use crate::sources::sources::ConfigSource;
@@ -45,11 +45,11 @@ impl ConfigSource<DateTime, ByteStream> for S3ConfigSource {
 
         match result {
             Ok(resp) => Ok(Some((resp.last_modified().cloned(), resp.body))),
-            Err(SdkError::ServiceError(ServiceError{source, raw})) => {
-                if raw.http().status() == 304 {
+            Err(SdkError::ServiceError(err)) => {
+                if err.raw().http().status() == 304 {
                     Ok(None)
                 } else {
-                    Err(source.into())
+                    Err(err.err().into())
                 }
             },
             Err(err) => Err(err.into())

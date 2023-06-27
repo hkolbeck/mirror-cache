@@ -5,12 +5,12 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
+use arc_swap::ArcSwap;
 use chrono::DateTime;
 use mirror_cache_core::collections::{UpdatingMap, UpdatingObject, UpdatingSet};
 use mirror_cache_core::metrics::Metrics;
 use mirror_cache_core::processors::RawConfigProcessor;
 use mirror_cache_core::util::{Absent, Error, FailureFn, FallbackFn, Holder, Result, UpdateFn};
-use parking_lot::RwLock;
 use scheduled_thread_pool::ScheduledThreadPool;
 
 use crate::sources::sources::ConfigSource;
@@ -39,7 +39,7 @@ impl<O: 'static> MirrorCache<O> {
         on_update: Option<U>, on_failure: Option<F>, mut metrics: Option<M>,
         fallback: Option<A>, constructor: fn(Holder<E, T>) -> O,
     ) -> Result<MirrorCache<O>> {
-        let holder: Holder<E, T> = Arc::new(RwLock::new(Arc::new(None)));
+        let holder: Holder<E, T> = Arc::new(ArcSwap::new(Arc::new(None)));
         let update_fn =
             MirrorCache::<O>::get_update_fn(holder.clone(), source, processor);
         let initial_fetch = update_fn(metrics.as_mut());
@@ -48,8 +48,8 @@ impl<O: 'static> MirrorCache<O> {
             Err(e) => {
                 match fallback {
                     Some(fallback_fun) => {
-                        let mut guard = holder.write();
-                        *guard = Arc::new(Some((None, fallback_fun.get_fallback())));
+                        let fallback_state = Arc::new(Some((None, fallback_fun.get_fallback())));
+                        holder.as_ref().store(fallback_state);
                         if let Some(m) = metrics.as_mut() {
                             m.fallback_invoked();
                         }
@@ -62,8 +62,8 @@ impl<O: 'static> MirrorCache<O> {
                     None => {
                         match fallback {
                             Some(fallback_fun) => {
-                                let mut guard = holder.write();
-                                *guard = Arc::new(Some((None, fallback_fun.get_fallback())));
+                                let fallback_state = Arc::new(Some((None, fallback_fun.get_fallback())));
+                                holder.as_ref().store(fallback_state);
                                 if let Some(m) = metrics.as_mut() {
                                     m.fallback_invoked();
                                 }
@@ -91,9 +91,7 @@ impl<O: 'static> MirrorCache<O> {
         };
 
         scheduler.execute_at_fixed_rate(interval, interval, move || {
-            let previous = {
-                holder.read().clone()
-            };
+            let previous = holder.load_full().clone();
 
             match update_fn(metrics.as_mut()) {
                 Ok(a) => if let Some((v, t)) = a.as_ref() {
@@ -132,10 +130,8 @@ impl<O: 'static> MirrorCache<O> {
         holder: Holder<E, T>, source: C, processor: P,
     ) -> impl Fn(Option<&mut M>) -> Result<Arc<Option<(Option<E>, T)>>> {
         move |metrics| {
-            let version = {
-                let guard = holder.read();
-                guard.as_ref().as_ref().map(|(v, _)| v.clone())
-            };
+            let version =
+                holder.load_full().as_ref().as_ref().map(|(v, _)| v.clone());
 
             let fetch_start = Instant::now();
             let raw_update = match version {
@@ -159,11 +155,8 @@ impl<O: 'static> MirrorCache<O> {
 
             match update {
                 Some((v, Ok(new_coll))) => {
-                    let ret = {
-                        let mut write_lock = holder.write();
-                        *write_lock = Arc::new(Some((v.clone(), new_coll)));
-                        Ok(write_lock.clone())
-                    };
+                    let ret = Arc::new(Some((v.clone(), new_coll)));
+                    holder.store(ret.clone());
 
                     if let Some(m) = metrics {
                         let now = SystemTime::now();
@@ -172,7 +165,7 @@ impl<O: 'static> MirrorCache<O> {
                         m.update(&v, fetch_time, process_time);
                     };
 
-                    ret
+                    Ok(ret)
                 }
                 Some((_, Err(e))) => {
                     if let Some(m) = metrics {
