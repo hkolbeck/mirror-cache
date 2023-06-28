@@ -3,8 +3,10 @@ use std::marker::PhantomData;
 use std::result;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
+
 use arc_swap::ArcSwap;
+use chrono::{DateTime, Utc};
+
 use crate::metrics::Metrics;
 
 #[derive(Debug)]
@@ -39,7 +41,7 @@ pub trait FallbackFn<T> {
 }
 
 pub struct Fallback<T> {
-    t: T
+    t: T,
 }
 
 impl<T> FallbackFn<T> for Fallback<T> {
@@ -78,6 +80,63 @@ impl<E, F: Fn(&Option<(Option<E>, T)>, &Option<E>, &T), T> OnUpdate<E, F, T> {
             f,
             _phantom_t: PhantomData::default(),
             _phantom_e: PhantomData::default(),
+        }
+    }
+}
+
+pub struct FieldUpdate<Config: Send + Sync> {
+    fields: Vec<Box<dyn Fn(Option<&Config>, &Config)>>,
+}
+
+pub struct FieldUpdateFn<Config: Send + Sync> {
+    fields: Vec<Box<dyn Fn(Option<&Config>, &Config)>>,
+}
+
+impl<Config: Send + Sync + 'static> FieldUpdate<Config> {
+    pub fn new() -> FieldUpdate<Config> {
+        FieldUpdate {
+            fields: vec![]
+        }
+    }
+
+    pub fn add_field<
+        ValType: PartialEq + 'static,
+        Action: Fn(Option<&ValType>, Option<&ValType>) + Send + Sync + 'static
+    >(
+        mut self,
+        extractor: fn(&Config) -> Option<&ValType>,
+        action: Action,
+    ) -> FieldUpdate<Config> {
+        self.fields.push(Box::new(
+            move |old_conf, new_conf| {
+                let old_val = old_conf.map(|conf| extractor(conf)).flatten();
+                let new_val = extractor(new_conf);
+
+                if old_val != new_val {
+                    action(old_val, new_val);
+                }
+            }
+        ));
+        self
+    }
+
+    pub fn build(self) -> FieldUpdateFn<Config> {
+        FieldUpdateFn {
+            fields: self.fields
+        }
+    }
+}
+
+impl<Config: Send + Sync, Version> UpdateFn<Config, Version> for FieldUpdateFn<Config> {
+    fn updated(
+        &self,
+        previous: &Option<(Option<Version>, Config)>,
+        _: &Option<Version>,
+        new_dataset: &Config,
+    ) {
+        let previous_config = previous.as_ref().map(|(_, conf)| conf);
+        for field in &self.fields {
+            field(previous_config, new_dataset)
         }
     }
 }
